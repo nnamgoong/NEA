@@ -1,0 +1,15 @@
+{
+    "name": "testin1",
+    "base_frequency": 871.4,
+    "sample_rate": 44100.0,
+    "duration": 1.0,
+    "volume": 0.815,
+    "tone": 0.125,
+    "num_harmonics": 35.3,
+    "adsr": {
+        "attack": 0.01,
+        "decay": 0.20305,
+        "sustain": 0.1486,
+        "release": 0.46117864084066273
+    }
+}

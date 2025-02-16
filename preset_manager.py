@@ -1,8 +1,8 @@
 import sqlite3
 import json
 import customtkinter as ctk
-from tkinter import filedialog
-
+from tkinter import filedialog, messagebox
+from datetime import datetime
 from utils import MergeSort, PresetExporterImporter
 
 
@@ -15,129 +15,138 @@ class PresetManager:
         self.create_preset_ui()
 
         
-            
+                
     def save_preset(self, preset_name, preset_type, preset_data):
-        """Save a preset (either additive or subtractive) to the database."""
-        print(f"Saving {preset_type} preset: {preset_name}")  # Debug statement
-        print(f"Preset Data: {preset_data}")  # Debug statement
-
+        """Save or update a preset in the database."""
         connection = sqlite3.connect(self.db_path)
         cursor = connection.cursor()
 
         try:
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # Check if the preset already exists
             if preset_type == "Additive":
-                cursor.execute("""
-                    INSERT INTO AdditivePresets (user_id, name, base_frequency, sample_rate, duration, volume, tone, num_harmonics, attack, decay, sustain, release)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    self.user_id, preset_name, preset_data["base_frequency"], preset_data["sample_rate"], preset_data["duration"],
-                    preset_data["volume"], preset_data["tone"], preset_data["num_harmonics"], preset_data["adsr"]["attack"],
-                    preset_data["adsr"]["decay"], preset_data["adsr"]["sustain"], preset_data["adsr"]["release"]
-                ))
-                connection.commit()  # Ensure changes are committed
-                print("Additive preset inserted successfully!")  # Debug statement
-                
+                cursor.execute("SELECT name FROM AdditivePresets WHERE user_id = ? AND name = ?", (self.user_id, preset_name))
             elif preset_type == "Subtractive":
-            
-                    # Save the main preset data
+                cursor.execute("SELECT name FROM SubtractivePresets WHERE user_id = ? AND name = ?", (self.user_id, preset_name))
+
+            preset_exists = cursor.fetchone() is not None
+
+            if preset_type == "Additive":
+                if preset_exists:
+                    # Update existing preset
                     cursor.execute("""
-                        INSERT INTO SubtractivePresets (user_id, name, volume)
-                        VALUES (?, ?, ?)
-                    """, (self.user_id, preset_name, preset_data["volume"]))
+                        UPDATE AdditivePresets
+                        SET base_frequency = ?, sample_rate = ?, duration = ?, volume = ?, tone = ?, num_harmonics = ?, attack = ?, decay = ?, sustain = ?, release = ?, last_updated = ?
+                        WHERE user_id = ? AND name = ?
+                    """, (
+                        preset_data["base_frequency"], preset_data["sample_rate"], preset_data["duration"],
+                        preset_data["volume"], preset_data["tone"], preset_data["num_harmonics"], preset_data["adsr"]["attack"],
+                        preset_data["adsr"]["decay"], preset_data["adsr"]["sustain"], preset_data["adsr"]["release"], current_time,
+                        self.user_id, preset_name
+                    ))
+                else:
+                    # Insert new preset
+                    cursor.execute("""
+                        INSERT INTO AdditivePresets (user_id, name, base_frequency, sample_rate, duration, volume, tone, num_harmonics, attack, decay, sustain, release, created_at, last_updated)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        self.user_id, preset_name, preset_data["base_frequency"], preset_data["sample_rate"], preset_data["duration"],
+                        preset_data["volume"], preset_data["tone"], preset_data["num_harmonics"], preset_data["adsr"]["attack"],
+                        preset_data["adsr"]["decay"], preset_data["adsr"]["sustain"], preset_data["adsr"]["release"], current_time, current_time
+                    ))
+
+            elif preset_type == "Subtractive":
+                if preset_exists:
+                    # Update existing preset
+                    cursor.execute("""
+                        UPDATE SubtractivePresets
+                        SET volume = ?, last_updated = ?
+                        WHERE user_id = ? AND name = ?
+                    """, (preset_data["volume"], current_time, self.user_id, preset_name))
+
+                    # Get the preset ID
+                    cursor.execute("SELECT Sid FROM SubtractivePresets WHERE user_id = ? AND name = ?", (self.user_id, preset_name))
+                    preset_id = cursor.fetchone()[0]
+
+                    # Delete existing components (oscillators, filters, effects, LFOs)
+                    cursor.execute("DELETE FROM SubtractivePresetOscillators WHERE preset_id = ?", (preset_id,))
+                    cursor.execute("DELETE FROM SubtractivePresetFilters WHERE preset_id = ?", (preset_id,))
+                    cursor.execute("DELETE FROM SubtractivePresetEffects WHERE preset_id = ?", (preset_id,))
+                    cursor.execute("DELETE FROM SubtractivePresetLFOs WHERE preset_id = ?", (preset_id,))
+
+                    # Save updated components
+                    self._save_subtractive_components(cursor, preset_id, preset_data)
+                else:
+                    # Insert new preset
+                    cursor.execute("""
+                        INSERT INTO SubtractivePresets (user_id, name, volume, created_at, last_updated)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (self.user_id, preset_name, preset_data["volume"], current_time, current_time))
 
                     # Get the ID of the newly created preset
                     preset_id = cursor.lastrowid
 
-                    # Save oscillators
-                    for osc in preset_data["oscillators"]:
-                        cursor.execute("""
-                            INSERT INTO SubtractivePresetOscillators (preset_id, type, frequency, amplitude)
-                            VALUES (?, ?, ?, ?)
-                        """, (preset_id, osc["type"], osc["frequency"], osc["amplitude"]))
+                    # Save oscillators, filters, effects, and LFOs
+                    self._save_subtractive_components(cursor, preset_id, preset_data)
 
-                    # Save filters
-                    for filt in preset_data["filters"]:
-                        cursor.execute("""
-                            INSERT INTO SubtractivePresetFilters (preset_id, filter_type, cutoff_frequency, resonance)
-                            VALUES (?, ?, ?, ?)
-                        """, (preset_id, filt["type"], filt["cutoff"], filt["resonance"]))
-
-                    # Save effects
-                    for effect in preset_data["effects"]:
-                        # Fetch effect ID from the database
-                        cursor.execute("SELECT Eid FROM Effects WHERE name = ?", (effect["type"],))
-                        result = cursor.fetchone()
-
-                        if result:
-                            effect_id = result[0]  # Use the valid effect ID
-                        else:
-                            # If the effect is missing, insert it first
-                            cursor.execute("INSERT INTO Effects (name, description) VALUES (?, ?)", (effect["type"], "Custom Effect"))
-                            effect_id = cursor.lastrowid  # Get the new effect ID
-
-                        # Save the effect parameters
-                        cursor.execute("""
-                            INSERT INTO SubtractivePresetEffects (preset_id, effect_id, parameters)
-                            VALUES (?, ?, ?)
-                        """, (preset_id, effect_id, json.dumps(effect["params"])))
-
-                    # Save LFOs
-                    for lfo in preset_data["lfos"]:
-                        cursor.execute("""
-                            INSERT INTO SubtractivePresetLFOs (preset_id, shape, frequency, depth, target)
-                            VALUES (?, ?, ?, ?, ?)
-                        """, (preset_id, lfo["shape"], lfo["frequency"], lfo["depth"], lfo["target"]))
-
-                    connection.commit()  # Commit all changes
-                    print(f"Subtractive preset '{preset_name}' saved successfully!")
-
+            connection.commit()
+            print(f"Preset '{preset_name}' {'updated' if preset_exists else 'saved'} successfully!")
         except sqlite3.Error as e:
-            print(f"ERROR: Database error: {e}")  # Print any database errors
-
+            print(f"ERROR: Database error: {e}")
         finally:
-            connection.close()  # Ensure connection closes to avoid locking issues
+            connection.close()
 
-        self.refresh_preset_list()  # Refresh the UI to show the new preset
+        # Refresh the preset list after saving
+        self.refresh_preset_list()
 
 
 
-
-            
+                
     def list_presets(self, sort_by="name"):
         """Retrieve a sorted list of all presets for the user."""
         connection = sqlite3.connect(self.db_path)
         cursor = connection.cursor()
-        
-        # Debug: Check Additive presets
-        cursor.execute("SELECT name, 'Additive' as type, created_at, last_updated FROM AdditivePresets WHERE user_id = ?", (self.user_id,))
-        additive_presets = cursor.fetchall()
-        print("Additive Presets:", additive_presets)  # Debug statement
 
-        # Debug: Check Subtractive presets
-        cursor.execute("SELECT name, 'Subtractive' as type, created_at, last_updated FROM SubtractivePresets WHERE user_id = ?", (self.user_id,))
+        # Retrieve additive presets
+        cursor.execute("""
+            SELECT name, 'Additive' as type, created_at, last_updated
+            FROM AdditivePresets
+            WHERE user_id = ?
+        """, (self.user_id,))
+        additive_presets = cursor.fetchall()
+
+        # Retrieve subtractive presets
+        cursor.execute("""
+            SELECT name, 'Subtractive' as type, created_at, last_updated
+            FROM SubtractivePresets
+            WHERE user_id = ?
+        """, (self.user_id,))
         subtractive_presets = cursor.fetchall()
-        print("Subtractive Presets:", subtractive_presets)  # Debug statement
 
         # Combine the results
         presets = additive_presets + subtractive_presets
-        
-        connection.close()
 
-        # Debug: Print the combined presets
-        print("Combined Presets:", presets)  # Debug statement
+        connection.close()
 
         # Sort the presets based on the selected sort type
         if sort_by == "name":
-            presets = sorted(presets, key=lambda x: x[0])  # Sort by name
+            presets = sorted(presets, key=lambda x: x[0])  # Sort by name (ascending)
         elif sort_by == "created_at":
-            presets = sorted(presets, key=lambda x: x[2])  # Sort by creation date
+            presets = sorted(presets, key=lambda x: x[2], reverse=True)  # Sort by creation date (latest first)
         elif sort_by == "last_updated":
-            presets = sorted(presets, key=lambda x: x[3])  # Sort by last updated date
+            presets = sorted(presets, key=lambda x: x[3], reverse=True)  # Sort by last updated date (latest first)
 
         return presets
     
+
     def delete_preset(self, preset_name):
-        """Delete a preset by name."""
+        """Delete a preset by name after confirming with the user."""
+        # Ask for confirmation before deleting
+        confirm = messagebox.askyesno("Delete Preset", f"Are you sure you want to delete '{preset_name}'?")
+        if not confirm:
+            return  # User canceled the deletion
+
         connection = sqlite3.connect(self.db_path)
         cursor = connection.cursor()
 
@@ -153,9 +162,11 @@ class PresetManager:
         except sqlite3.Error as e:
             print(f"Error deleting preset: {e}")
         finally:
-            connection.close()  # Ensure the connection is closed
+            connection.close()
 
-        self.refresh_preset_list()  # Refresh the UI
+        # Refresh the preset list after deleting
+        self.refresh_preset_list()
+
             
     def create_preset_ui(self):
         """Create the UI for managing presets inside the Presets tab."""
@@ -182,39 +193,61 @@ class PresetManager:
         self.refresh_preset_list()
 
     def refresh_preset_list(self, *args):
-        """Refresh the preset list inside the UI without infinite recursion."""
-        # print("Refreshing preset list...")  # Comment out or remove this line
-        if hasattr(self, "updating") and self.updating:
-            return  # Prevent recursive refreshes
-        self.updating = True
-
+        """Refresh the preset list inside the UI with headers and checkboxes."""
         # Clear existing widgets in the preset listbox
         for widget in self.preset_listbox.winfo_children():
             widget.destroy()
 
+        # Add headers
+        header_frame = ctk.CTkFrame(self.preset_listbox)
+        header_frame.pack(fill="x", padx=5, pady=5)
+
+        # Checkbox header (empty for alignment)
+        ctk.CTkLabel(header_frame, text="", width=30).grid(row=0, column=0, padx=5, pady=5)
+
+        # Preset Name header
+        ctk.CTkLabel(header_frame, text="Preset Name", width=150, font=("Arial", 12, "bold")).grid(row=0, column=1, padx=5, pady=5)
+
+        # Synth Type header
+        ctk.CTkLabel(header_frame, text="Synth Type", width=100, font=("Arial", 12, "bold")).grid(row=0, column=2, padx=5, pady=5)
+
+        # Created At header
+        ctk.CTkLabel(header_frame, text="Created At", width=150, font=("Arial", 12, "bold")).grid(row=0, column=3, padx=5, pady=5)
+
+        # Last Updated header
+        ctk.CTkLabel(header_frame, text="Last Updated", width=150, font=("Arial", 12, "bold")).grid(row=0, column=4, padx=5, pady=5)
+
         # Get the presets sorted by the selected sort type
         presets = self.list_presets(self.sort_var.get())
 
-        # Add presets to the listbox
+        # Add presets to the UI
         for idx, (name, preset_type, created_at, last_updated) in enumerate(presets, start=1):
             frame = ctk.CTkFrame(self.preset_listbox)
             frame.pack(fill="x", padx=5, pady=2)
 
-            # Add the preset name
-            ctk.CTkLabel(frame, text=name, width=150).grid(row=idx, column=0, padx=5, pady=5)
+            # Add a checkbox for selecting the preset
+            checkbox_var = ctk.BooleanVar(value=False)
+            checkbox = ctk.CTkCheckBox(frame, text="", variable=checkbox_var, width=30)
+            checkbox.grid(row=idx, column=0, padx=5, pady=5)
 
-            # Add the preset type
-            ctk.CTkLabel(frame, text=preset_type, width=100).grid(row=idx, column=1, padx=5, pady=5)
+            # Store the checkbox variable for later use
+            setattr(frame, "checkbox_var", checkbox_var)
+
+            # Add the preset name
+            ctk.CTkLabel(frame, text=name, width=150).grid(row=idx, column=1, padx=5, pady=5)
+
+            # Add the synth type
+            ctk.CTkLabel(frame, text=preset_type, width=100).grid(row=idx, column=2, padx=5, pady=5)
 
             # Add the created date
-            ctk.CTkLabel(frame, text=created_at, width=150).grid(row=idx, column=2, padx=5, pady=5)
+            ctk.CTkLabel(frame, text=created_at, width=150).grid(row=idx, column=3, padx=5, pady=5)
 
             # Add the last updated date
-            ctk.CTkLabel(frame, text=last_updated, width=150).grid(row=idx, column=3, padx=5, pady=5)
+            ctk.CTkLabel(frame, text=last_updated, width=150).grid(row=idx, column=4, padx=5, pady=5)
 
             # Add Load and Delete buttons
             button_frame = ctk.CTkFrame(frame)
-            button_frame.grid(row=idx, column=4, padx=5, pady=5)
+            button_frame.grid(row=idx, column=5, padx=5, pady=5)
 
             load_button = ctk.CTkButton(button_frame, text="Load", command=lambda n=name, t=preset_type: self.load_preset(n, t))
             load_button.pack(side="left", padx=2)
@@ -222,8 +255,6 @@ class PresetManager:
             delete_button = ctk.CTkButton(button_frame, text="Delete", command=lambda n=name: self.delete_preset(n))
             delete_button.pack(side="left", padx=2)
 
-        self.updating = False
-        
     def load_preset(self, preset_name, preset_type):
         """Load the selected preset and apply it to the corresponding synth UI."""
         print(f"Loading preset: {preset_name} ({preset_type})")
@@ -327,33 +358,57 @@ class PresetManager:
             
     def export_preset(self):
         """Export the selected preset to a text file."""
-        selected_preset_name = self.preset_var.get()
-        if not selected_preset_name:
+        selected_preset = None
+
+        # Find the selected preset
+        for widget in self.preset_listbox.winfo_children():
+            if isinstance(widget, ctk.CTkFrame) and hasattr(widget, "checkbox_var"):
+                if widget.checkbox_var.get():  # Check if the checkbox is selected
+                    # Extract the preset name and type from the labels in the frame
+                    labels = [child for child in widget.winfo_children() if isinstance(child, ctk.CTkLabel)]
+                    if len(labels) >= 4:  # Ensure there are at least four labels (name, type, created_at, last_updated)
+                        preset_name = labels[0].cget("text")
+                        preset_type = labels[1].cget("text")
+                        selected_preset = (preset_name, preset_type)
+                        break
+
+        if not selected_preset:
             print("Error: No preset selected.")
             return
 
-        preset_type = self.get_preset_type(selected_preset_name)
-        if not preset_type:
-            print("Error: Preset type not found.")
-            return
+        preset_name, preset_type = selected_preset
 
-        preset_data = self.load_preset_data(selected_preset_name, preset_type)
+        # Fetch the preset data
+        preset_data = self.load_preset_data(preset_name, preset_type)
         if not preset_data:
             print("Error: Preset not found.")
             return
 
+        # Prompt the user to choose a file path
         file_path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text Files", "*.txt")])
         if file_path:
+            # Export the preset
             PresetExporterImporter.export_preset(preset_data, file_path)
+            print(f"Preset '{preset_name}' exported successfully to {file_path}")
 
     def import_preset(self):
-        """Import a preset from a text file."""
+        """Import a preset from a text file and load it into the appropriate synth."""
         file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
         if file_path:
             preset_data = PresetExporterImporter.import_preset(file_path)
             if preset_data:
-                self.app.navigate_to_synth(preset_data.get("type", "Subtractive"), preset_data)
-                    
+                # Check if the preset data includes the synth type
+                preset_type = preset_data.get("type")
+                if preset_type not in ["Additive", "Subtractive"]:
+                    print("Error: Invalid or missing synth type in imported preset.")
+                    return
+
+                # Navigate to the appropriate synth and load the preset
+                self.app.navigate_to_synth(preset_type, preset_data)
+
+                # Refresh the preset list after importing
+                self.refresh_preset_list()
+                        
     def get_selected_preset(self):
         """Get the name and type of the currently selected preset."""
         for widget in self.preset_listbox.winfo_children():
@@ -381,3 +436,24 @@ class PresetManager:
 
         connection.close()
         return None
+    
+    def preset_exists(self, preset_name, preset_type):
+        """Check if a preset with the given name and type already exists."""
+        connection = sqlite3.connect(self.db_path)
+        cursor = connection.cursor()
+
+        try:
+            if preset_type == "Additive":
+                cursor.execute("SELECT name FROM AdditivePresets WHERE user_id = ? AND name = ?", (self.user_id, preset_name))
+            elif preset_type == "Subtractive":
+                cursor.execute("SELECT name FROM SubtractivePresets WHERE user_id = ? AND name = ?", (self.user_id, preset_name))
+            else:
+                return False  # Invalid preset type
+
+            result = cursor.fetchone()
+            return result is not None  # Return True if the preset exists, False otherwise
+        except sqlite3.Error as e:
+            print(f"ERROR: Database error: {e}")
+            return False
+        finally:
+            connection.close()

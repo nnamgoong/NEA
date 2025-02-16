@@ -4,7 +4,7 @@ import sounddevice as sd
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from threading import Timer
-from tkinter import simpledialog
+from tkinter import simpledialog, messagebox
 
 from utils import ScrollableFrame
 from preset_manager import PresetManager
@@ -22,6 +22,9 @@ class AdditiveSynth:
         self.update_timer = None  # Initialize update_timer
         self.adsr_sliders = {}
         self.create_ui()
+
+        #Track preset name
+        self.loaded_preset_name = None 
 
 
     def create_ui(self):
@@ -79,15 +82,35 @@ class AdditiveSynth:
         slider.set(initial_value)
         slider.pack(pady=10)
         return slider
-    
+        
     def save_current_preset(self):
-        """Save the current preset to the database."""
-        print("Save Preset button clicked!")  # Debug statement
-        preset_name = simpledialog.askstring("Save Preset", "Enter preset name:")
+        """Save the current settings, checking for overwrite and pre-filling the preset name."""
+        # Pre-fill the save dialog with the loaded preset name (if it exists)
+        initial_name = self.loaded_preset_name if self.loaded_preset_name else ""
+
+        # Prompt the user for the preset name
+        preset_name = simpledialog.askstring("Save Preset", "Enter preset name:", initialvalue=initial_name)
         if not preset_name:
+            print("Preset name cannot be empty.")
             return  # User canceled or entered an empty name
 
-        preset_data = {
+        # Check if the preset already exists
+        if self.preset_manager.preset_exists(preset_name, "Additive"):
+            # Ask the user if they want to overwrite the existing preset
+            confirm = messagebox.askyesno("Overwrite Preset", f"A preset named '{preset_name}' already exists. Do you want to overwrite it?")
+            if not confirm:
+                return  # User canceled the overwrite
+
+        # Get the current settings
+        preset_data = self.get_preset_data()
+
+        # Save the preset (this will overwrite if it already exists)
+        self.preset_manager.save_preset(preset_name, "Additive", preset_data)
+        
+    def get_preset_data(self):
+        """Get the current settings of the additive synthesizer."""
+        return {
+            "type": "Additive",  # Add this line
             "base_frequency": self.base_freq_slider.get(),
             "sample_rate": self.sample_rate,
             "duration": self.duration,
@@ -101,11 +124,6 @@ class AdditiveSynth:
                 "release": self.adsr_sliders["release"].get(),
             },
         }
-
-        # Save the preset using the preset manager
-        self.preset_manager.save_preset(preset_name, "Additive", preset_data)
-
-
 
     def debounced_update(self, *args):
         """Debounce updates for performance."""
@@ -191,10 +209,13 @@ class AdditiveSynth:
         return envelope
     
     def load_preset(self, preset_data):
-        """Load an additive preset from the provided data."""
+        """Load a preset and update the UI."""
         if not preset_data:
             print("Error: Invalid preset data.")
             return
+
+        # Update the loaded preset name
+        self.loaded_preset_name = preset_data.get("name")
 
         print(f"Loading Additive Preset: {preset_data}")
 

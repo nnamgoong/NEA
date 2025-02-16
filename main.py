@@ -44,8 +44,7 @@ class SynthApp(ctk.CTk):
         self.create_additive_synth_ui()
         self.create_subtractive_synth_ui()
 
-        # Use a timer to check the selected tab every 500ms
-        self.check_tab_selection()
+
 
     def check_tab_selection(self):
         """Check which tab is selected and refresh the preset list if necessary."""
@@ -105,7 +104,6 @@ class SynthApp(ctk.CTk):
             self.preset_manager = PresetManager(self.user_id, self.presets_tab, self, "synth.db")
 
 
-
     def navigate_to_synth(self, synth_type, preset_data):
         """Navigate to the appropriate synth UI and load the preset data."""
         if synth_type == "Additive":
@@ -118,6 +116,8 @@ class SynthApp(ctk.CTk):
                 self.tab_view.set("Subtractive Synth")
             self.subtractive_synth.load_preset(preset_data)    
 
+        else:
+            print(f"Error: Unknown synth type '{synth_type}'.")
 
     def update_presets(self):
         self.preset_manager.refresh_presets()

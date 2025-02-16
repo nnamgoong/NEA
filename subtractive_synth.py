@@ -5,7 +5,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from scipy.signal import butter, lfilter, sosfilt
 from threading import Timer
-from tkinter import simpledialog
+from tkinter import simpledialog, messagebox
 
 from tooltips import Tooltip
 from utils import ScrollableFrame
@@ -29,6 +29,9 @@ class SubtractiveSynth:
         self.lfos = [] 
 
         self.volume = 0.5
+
+        #Track preset name
+        self.loaded_preset_name = None 
 
         # Timer for debounced updates
         self.update_timer = None
@@ -681,77 +684,81 @@ class SubtractiveSynth:
 
         return chorus_wave / (num_voices + 1)  # Normalize output
 
+
     def save_current_preset(self):
-        """Save the current preset, including multiple oscillators, filters, LFOs, and effects."""
-        preset_name = simpledialog.askstring("Save Preset", "Enter preset name:")
+        """Save the current settings, checking for overwrite and pre-filling the preset name."""
+        # Pre-fill the save dialog with the loaded preset name (if it exists)
+        initial_name = self.loaded_preset_name if self.loaded_preset_name else ""
+
+        # Prompt the user for the preset name
+        preset_name = simpledialog.askstring("Save Preset", "Enter preset name:", initialvalue=initial_name)
         if not preset_name:
+            print("Preset name cannot be empty.")
             return  # User canceled or entered an empty name
 
-        # Extract all oscillators before saving
-        oscillators_data = [
-            {
-                "type": osc["type"].get(),
-                "frequency": float(osc["frequency"].get()),
-                "amplitude": osc["amplitude"].get(),
-            }
-            for osc in self.oscillators
-        ]
+        # Check if the preset already exists
+        if self.preset_manager.preset_exists(preset_name, "Subtractive"):
+            # Ask the user if they want to overwrite the existing preset
+            confirm = messagebox.askyesno("Overwrite Preset", f"A preset named '{preset_name}' already exists. Do you want to overwrite it?")
+            if not confirm:
+                return  # User canceled the overwrite
 
-        # Extract all filters before saving
-        filters_data = [
-            {
-                "type": filt["type"].get(),
-                "cutoff": filt["frequency"].get(),
-                "resonance": filt["resonance"].get(),
-            }
-            for filt in self.filters
-        ]
+        # Get the current settings
+        preset_data = self.get_preset_data()
 
-        # Extract all effects before saving
-        effects_data = []
-        for effect in self.effects:
-            effect_type = effect["type"].get()
-            params = {}
-            for param_key, param_value in effect["params"].items():
-                if callable(param_value):  # If it's a slider, get its value
-                    params[param_key] = param_value()
-                else:
-                    params[param_key] = param_value
-            effects_data.append({
-                "type": effect_type,
-                "params": params,
-            })
-
-        # Extract all LFOs before saving
-        lfos_data = [
-            {
-                "shape": lfo["shape"].get(),
-                "frequency": float(lfo["frequency"].get()),
-                "depth": lfo["depth"].get(),
-                "target": lfo["target"].get(),
-            }
-            for lfo in self.lfos
-        ]
-
-        # Collect all preset data
-        preset_data = {
-            "volume": self.volume_slider.get(),
-            "oscillators": oscillators_data,
-            "filters": filters_data,
-            "effects": effects_data,
-            "lfos": lfos_data,
-        }
-
-        # Save the preset using the preset manager
+        # Save the preset (this will overwrite if it already exists)
         self.preset_manager.save_preset(preset_name, "Subtractive", preset_data)
 
-
+    def get_preset_data(self):
+        """Get the current settings of the subtractive synthesizer."""
+        return {
+            "type": "Subtractive",  # Add this line
+            "volume": self.volume_slider.get(),
+            "oscillators": [
+                {
+                    "type": osc["type"].get(),
+                    "frequency": float(osc["frequency"].get()),
+                    "amplitude": osc["amplitude"].get(),
+                }
+                for osc in self.oscillators
+            ],
+            "filters": [
+                {
+                    "type": filt["type"].get(),
+                    "cutoff": filt["frequency"].get(),
+                    "resonance": filt["resonance"].get(),
+                }
+                for filt in self.filters
+            ],
+            "effects": [
+                {
+                    "type": effect["type"].get(),
+                    "params": {
+                        key: value() if callable(value) else value
+                        for key, value in effect["params"].items()
+                    },
+                }
+                for effect in self.effects
+            ],
+            "lfos": [
+                {
+                    "shape": lfo["shape"].get(),
+                    "frequency": float(lfo["frequency"].get()),
+                    "depth": lfo["depth"].get(),
+                    "target": lfo["target"].get(),
+                }
+                for lfo in self.lfos
+            ],
+        }
 
     def load_preset(self, preset_data):
-        """Load a subtractive preset and update the UI."""
+        """Load a preset and update the UI."""
         if not preset_data:
             print("Error: Invalid preset data.")
             return
+
+        # Update the loaded preset name
+        self.loaded_preset_name = preset_data.get("name")
 
         print(f"Loading Subtractive Preset: {preset_data}")
 
