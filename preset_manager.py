@@ -193,7 +193,7 @@ class PresetManager:
         self.refresh_preset_list()
 
     def refresh_preset_list(self, *args):
-        """Refresh the preset list inside the UI with headers and checkboxes."""
+        """Refresh the preset list inside the UI with headers and radio buttons for single selection."""
         # Clear existing widgets in the preset listbox
         for widget in self.preset_listbox.winfo_children():
             widget.destroy()
@@ -202,7 +202,7 @@ class PresetManager:
         header_frame = ctk.CTkFrame(self.preset_listbox)
         header_frame.pack(fill="x", padx=5, pady=5)
 
-        # Checkbox header (empty for alignment)
+        # Radio button header (empty for alignment)
         ctk.CTkLabel(header_frame, text="", width=30).grid(row=0, column=0, padx=5, pady=5)
 
         # Preset Name header
@@ -220,18 +220,22 @@ class PresetManager:
         # Get the presets sorted by the selected sort type
         presets = self.list_presets(self.sort_var.get())
 
+        # Use a single StringVar to track the selected preset
+        self.selected_preset_var = ctk.StringVar(value="")
+
         # Add presets to the UI
         for idx, (name, preset_type, created_at, last_updated) in enumerate(presets, start=1):
             frame = ctk.CTkFrame(self.preset_listbox)
             frame.pack(fill="x", padx=5, pady=2)
 
-            # Add a checkbox for selecting the preset
-            checkbox_var = ctk.BooleanVar(value=False)
-            checkbox = ctk.CTkCheckBox(frame, text="", variable=checkbox_var, width=30)
-            checkbox.grid(row=idx, column=0, padx=5, pady=5)
-
-            # Store the checkbox variable for later use
-            setattr(frame, "checkbox_var", checkbox_var)
+            # Add a radio button for selecting the preset
+            radio_button = ctk.CTkRadioButton(
+                frame,
+                text="",
+                variable=self.selected_preset_var,
+                value=name,  # Use the preset name as the value
+            )
+            radio_button.grid(row=idx, column=0, padx=5, pady=5)
 
             # Add the preset name
             ctk.CTkLabel(frame, text=name, width=150).grid(row=idx, column=1, padx=5, pady=5)
@@ -290,6 +294,7 @@ class PresetManager:
             base_frequency, sample_rate, duration, volume, tone, num_harmonics, attack, decay, sustain, release = result
 
             return {
+                "type": preset_type,
                 "name": preset_name,
                 "base_frequency": base_frequency,
                 "sample_rate": sample_rate,
@@ -348,6 +353,7 @@ class PresetManager:
             lfos = [{"shape": row[0], "frequency": row[1], "depth": row[2], "target": row[3]} for row in cursor.fetchall()]
 
             return {
+                "type": preset_type,
                 "name": preset_name,
                 "volume": volume,
                 "oscillators": oscillators,
@@ -358,28 +364,30 @@ class PresetManager:
             
     def export_preset(self):
         """Export the selected preset to a text file."""
-        selected_preset = None
-
-        # Find the selected preset
-        for widget in self.preset_listbox.winfo_children():
-            if isinstance(widget, ctk.CTkFrame) and hasattr(widget, "checkbox_var"):
-                if widget.checkbox_var.get():  # Check if the checkbox is selected
-                    # Extract the preset name and type from the labels in the frame
-                    labels = [child for child in widget.winfo_children() if isinstance(child, ctk.CTkLabel)]
-                    if len(labels) >= 4:  # Ensure there are at least four labels (name, type, created_at, last_updated)
-                        preset_name = labels[0].cget("text")
-                        preset_type = labels[1].cget("text")
-                        selected_preset = (preset_name, preset_type)
-                        break
-
-        if not selected_preset:
+        selected_preset_name = self.selected_preset_var.get()
+        if not selected_preset_name:
             print("Error: No preset selected.")
             return
 
-        preset_name, preset_type = selected_preset
+        # Find the preset type (Additive or Subtractive)
+        connection = sqlite3.connect(self.db_path)
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT 'Additive' FROM AdditivePresets WHERE user_id = ? AND name = ?", (self.user_id, selected_preset_name))
+        if cursor.fetchone():
+            preset_type = "Additive"
+        else:
+            cursor.execute("SELECT 'Subtractive' FROM SubtractivePresets WHERE user_id = ? AND name = ?", (self.user_id, selected_preset_name))
+            if cursor.fetchone():
+                preset_type = "Subtractive"
+            else:
+                print("Error: Preset not found.")
+                return
+
+        connection.close()
 
         # Fetch the preset data
-        preset_data = self.load_preset_data(preset_name, preset_type)
+        preset_data = self.load_preset_data(selected_preset_name, preset_type)
         if not preset_data:
             print("Error: Preset not found.")
             return
@@ -389,15 +397,14 @@ class PresetManager:
         if file_path:
             # Export the preset
             PresetExporterImporter.export_preset(preset_data, file_path)
-            print(f"Preset '{preset_name}' exported successfully to {file_path}")
-
+            print(f"Preset '{selected_preset_name}' exported successfully to {file_path}")
     def import_preset(self):
         """Import a preset from a text file and load it into the appropriate synth."""
         file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
         if file_path:
             preset_data = PresetExporterImporter.import_preset(file_path)
             if preset_data:
-                # Check if the preset data includes the synth type
+                print(f"Imported Preset Data: {preset_data}")  # Debug statement
                 preset_type = preset_data.get("type")
                 if preset_type not in ["Additive", "Subtractive"]:
                     print("Error: Invalid or missing synth type in imported preset.")
@@ -407,8 +414,7 @@ class PresetManager:
                 self.app.navigate_to_synth(preset_type, preset_data)
 
                 # Refresh the preset list after importing
-                self.refresh_preset_list()
-                        
+                self.refresh_preset_list()    
     def get_selected_preset(self):
         """Get the name and type of the currently selected preset."""
         for widget in self.preset_listbox.winfo_children():

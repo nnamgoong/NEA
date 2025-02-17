@@ -41,20 +41,20 @@ class MergeSort:
 
 
 class PresetExporterImporter:
-    """Utility class for exporting and importing presets as text files."""
     @staticmethod
     def export_preset(preset_data, file_path):
         """
         Export one or more presets to a text file.
 
         Args:
-            preset_data (list or dict): The preset data to export.
+            preset_data (dict): The preset data to export.
             file_path (str): The path to save the text file.
         """
         try:
+            print(f"Exporting Preset Data: {preset_data}")  # Debug statement
             with open(file_path, "w") as file:
                 json.dump(preset_data, file, indent=4)
-            print(f"Preset(s) exported successfully to {file_path}")
+            print(f"Preset exported successfully to {file_path}")
         except Exception as e:
             print(f"Error exporting preset: {e}")
 

@@ -101,16 +101,17 @@ class AdditiveSynth:
             if not confirm:
                 return  # User canceled the overwrite
 
-        # Get the current settings
-        preset_data = self.get_preset_data()
+        # Get the current settings, including the preset name
+        preset_data = self.get_preset_data(preset_name)
 
         # Save the preset (this will overwrite if it already exists)
         self.preset_manager.save_preset(preset_name, "Additive", preset_data)
-        
-    def get_preset_data(self):
+
+    def get_preset_data(self, preset_name):
         """Get the current settings of the additive synthesizer."""
         return {
-            "type": "Additive",  # Add this line
+            "type": "Additive",  # Explicitly include the synth type
+            "name": preset_name,  # Dynamic preset name
             "base_frequency": self.base_freq_slider.get(),
             "sample_rate": self.sample_rate,
             "duration": self.duration,

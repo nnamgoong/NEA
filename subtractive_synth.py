@@ -703,16 +703,17 @@ class SubtractiveSynth:
             if not confirm:
                 return  # User canceled the overwrite
 
-        # Get the current settings
-        preset_data = self.get_preset_data()
+        # Get the current settings, including the preset name
+        preset_data = self.get_preset_data(preset_name)
 
         # Save the preset (this will overwrite if it already exists)
         self.preset_manager.save_preset(preset_name, "Subtractive", preset_data)
 
-    def get_preset_data(self):
+    def get_preset_data(self, preset_name):
         """Get the current settings of the subtractive synthesizer."""
         return {
-            "type": "Subtractive",  # Add this line
+            "type": "Subtractive",  # Explicitly include the synth type
+            "name": preset_name,  # Dynamic preset name
             "volume": self.volume_slider.get(),
             "oscillators": [
                 {
