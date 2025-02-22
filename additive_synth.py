@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from threading import Timer
 from tkinter import simpledialog, messagebox
 
-from utils import ScrollableFrame
+from utils import ScrollableFrame, FFT
 from preset_manager import PresetManager
 from tooltips import Tooltip
 
@@ -15,43 +15,76 @@ class AdditiveSynth:
         self.parent = parent
         self.sample_rate = sample_rate
         self.duration = duration
-        self.preset_manager = preset_manager  # Initialize preset_manager
+        self.preset_manager = preset_manager
         self.user_id = user_id
 
         # Initialize variables
-        self.update_timer = None  # Initialize update_timer
+        self.update_timer = None
         self.adsr_sliders = {}
         self.create_ui()
 
-        #Track preset name
-        self.loaded_preset_name = None 
-
+        # Track preset name
+        self.loaded_preset_name = None
 
     def create_ui(self):
         """Initialize the UI."""
-        self.control_frame = ScrollableFrame(self.parent, width=300)
-        self.control_frame.pack(side="left", fill="y", padx=10, pady=10)
+        # Main Layout: Controls on the left, Graphs on the right
+        self.controls_frame = ctk.CTkFrame(self.parent, width=300)
+        self.controls_frame.pack(side="left", fill="y", padx=10, pady=10)
 
         self.graph_frame = ctk.CTkFrame(self.parent)
         self.graph_frame.pack(side="right", expand=True, fill="both", padx=10, pady=10)
 
-        # Add sliders
-        self.base_freq_slider = self.add_slider(self.control_frame, "Base Frequency (Hz)", 20, 2000, 440)
-        self.volume_slider = self.add_slider(self.control_frame, "Volume", 0.0, 1.0, 0.5)
-        self.harmonics_slider = self.add_slider(self.control_frame, "Number of Harmonics", 1, 50, 10)
-        self.tone_slider = self.add_slider(self.control_frame, "Tone", 0.0, 1.0, 0.5)
-        self.rolloff_slider = self.add_slider(self.control_frame, "Harmonic Roll-Off", 0.1, 2.0, 1.0)
-        
-        Tooltip(self.base_freq_slider,'Chooses the funamental frequency of the sound.')
-        Tooltip(self.volume_slider,'Determines the volume of the sound')
-        Tooltip(self.harmonics_slider,'Chooses the number of harmonic partials the sound is comprised of.')
-        Tooltip(self.tone_slider,'Alters the balance of the odd and even frequencies to create a different timbre')
-        Tooltip(self.rolloff_slider,'Alters the rate at which the harmonics decrease in amplitude, can create a more subtle sound')
+        # Scrollable area for sliders
+        self.scrollable_frame = ScrollableFrame(self.controls_frame, width=450)
+        self.scrollable_frame.pack(fill="both", expand=True, pady=(0, 10))
+
+        # Add duration input
+        self.duration_label = ctk.CTkLabel(self.scrollable_frame, text="Duration (seconds)")
+        self.duration_label.pack(pady=(10, 0))
+        self.duration_entry = ctk.CTkEntry(self.scrollable_frame)
+        self.duration_entry.insert(0, str(self.duration))  # Set default duration
+        self.duration_entry.pack(pady=5)
+        Tooltip(self.duration_entry, "Set the duration of the sound in seconds.")
+
+        # Replace frequency slider with an input box
+        self.base_freq_label = ctk.CTkLabel(self.scrollable_frame, text="Base Frequency (Hz)")
+        self.base_freq_label.pack(pady=(10, 0))
+        self.base_freq_entry = ctk.CTkEntry(self.scrollable_frame)
+        self.base_freq_entry.insert(0, "440")  # Default frequency (A4)
+        self.base_freq_entry.pack(pady=5)
+        Tooltip(self.base_freq_entry, "Set the fundamental frequency of the sound.")
+
+        # Add volume slider
+        self.volume_slider = self.add_slider(self.scrollable_frame, "Volume", 0.0, 1.0, 0.5)
+        Tooltip(self.volume_slider, "Determines the volume of the sound.")
+
+        # Add harmonics slider with a label to display the current value
+        self.harmonics_frame = ctk.CTkFrame(self.scrollable_frame)
+        self.harmonics_frame.pack(pady=(10, 0))
+        self.harmonics_label = ctk.CTkLabel(self.harmonics_frame, text="Number of Harmonics")
+        self.harmonics_label.pack(side="left", padx=5)
+        self.harmonics_value_label = ctk.CTkLabel(self.harmonics_frame, text="10")  # Default value
+        self.harmonics_value_label.pack(side="right", padx=5)
+        self.harmonics_slider = ctk.CTkSlider(
+            self.scrollable_frame, from_=1, to=50, command=self.debounced_update
+        )
+        self.harmonics_slider.set(10)  # Default value
+        self.harmonics_slider.pack(pady=5)
+        Tooltip(self.harmonics_slider, "Chooses the number of harmonic partials the sound is comprised of.")
+
+        # Add tone slider
+        self.tone_slider = self.add_slider(self.scrollable_frame, "Tone", 0.0, 1.0, 0.5)
+        Tooltip(self.tone_slider, "Alters the balance of the odd and even frequencies to create a different timbre.")
+
+        # Add rolloff slider
+        self.rolloff_slider = self.add_slider(self.scrollable_frame, "Harmonic Roll-Off", 0.1, 2.0, 1.0)
+        Tooltip(self.rolloff_slider, "Alters the rate at which the harmonics decrease in amplitude, can create a more subtle sound.")
 
         # ADSR Controls
         for param in ["Attack", "Decay", "Sustain", "Release"]:
             slider = self.add_slider(
-                self.control_frame,
+                self.scrollable_frame,
                 param,
                 0.01,
                 1.0 if param != "Sustain" else 1.0,
@@ -59,13 +92,13 @@ class AdditiveSynth:
             )
             self.adsr_sliders[param.lower()] = slider
 
-        # Play Button
-        self.play_button = ctk.CTkButton(self.control_frame, text="Play Sound", command=self.play_sound)
-        self.play_button.pack(pady=10)
+        # Play Button (outside the scrollable frame)
+        self.play_button = ctk.CTkButton(self.controls_frame, text="Play Sound", command=self.play_sound)
+        self.play_button.pack(side="bottom", pady=10)
 
-        # Save Preset Button
-        self.save_button = ctk.CTkButton(self.control_frame, text="Save Preset", command=self.save_current_preset)
-        self.save_button.pack(pady=10)
+        # Save Preset Button (outside the scrollable frame)
+        self.save_button = ctk.CTkButton(self.controls_frame, text="Save Preset", command=self.save_current_preset)
+        self.save_button.pack(side="bottom", pady=10)
 
         # Graphs
         self.figure, (self.freq_ax, self.adsr_ax) = plt.subplots(2, 1, figsize=(5, 5))
@@ -82,7 +115,7 @@ class AdditiveSynth:
         slider.set(initial_value)
         slider.pack(pady=10)
         return slider
-        
+
     def save_current_preset(self):
         """Save the current settings, checking for overwrite and pre-filling the preset name."""
         # Pre-fill the save dialog with the loaded preset name (if it exists)
@@ -112,12 +145,12 @@ class AdditiveSynth:
         return {
             "type": "Additive",  # Explicitly include the synth type
             "name": preset_name,  # Dynamic preset name
-            "base_frequency": self.base_freq_slider.get(),
+            "base_frequency": float(self.base_freq_entry.get()),  # Get frequency from entry box
             "sample_rate": self.sample_rate,
-            "duration": self.duration,
+            "duration": float(self.duration_entry.get()),  # Get duration from entry box
             "volume": self.volume_slider.get(),
             "tone": self.tone_slider.get(),
-            "num_harmonics": self.harmonics_slider.get(),
+            "num_harmonics": int(self.harmonics_slider.get()),
             "adsr": {
                 "attack": self.adsr_sliders["attack"].get(),
                 "decay": self.adsr_sliders["decay"].get(),
@@ -127,12 +160,17 @@ class AdditiveSynth:
         }
 
     def debounced_update(self, *args):
-        """Debounce updates for performance."""
+        """Debounce updates for performance and update the harmonics value label."""
+        # Update the harmonics value label
+        self.harmonics_value_label.configure(text=str(int(float(self.harmonics_slider.get()))))
+
+        # Cancel any existing timer
         if self.update_timer:
             self.update_timer.cancel()
-        self.update_timer = Timer(0.3, self.update_graphs)  # Update after 300 ms
-        self.update_timer.start()
 
+        # Schedule the graphs to update after 300 ms
+        self.update_timer = Timer(0.3, self.update_graphs)
+        self.update_timer.start()
 
     def validate_adsr(self):
         """Ensure ADSR times do not exceed the total duration."""
@@ -154,8 +192,8 @@ class AdditiveSynth:
         waveform = self.generate_waveform()
 
         # FFT for frequency domain
-        fft_result = np.fft.rfft(waveform)
-        freqs = np.fft.rfftfreq(len(waveform), 1 / self.sample_rate)
+        fft_result = FFT.rfft(waveform) / len(waveform)  # Normalize the FFT output
+        freqs = FFT.rfftfreq(len(waveform), 1 / self.sample_rate)
 
         # Update frequency domain graph
         self.freq_ax.clear()
@@ -175,40 +213,89 @@ class AdditiveSynth:
         # Redraw the canvas
         self.canvas.draw()
 
-    def generate_waveform(self):
-        """Generate the additive waveform based on harmonics and ADSR envelope."""
-        t = np.linspace(0, self.duration, int(self.sample_rate * self.duration), endpoint=False)
-        waveform = np.zeros_like(t)
-        harmonics = int(self.harmonics_slider.get())
+    def generate_waveform(self) -> np.ndarray:
+        """
+        Generate the additive waveform using IFFT and adjust for duration.
+        """
+        # Get the number of harmonics
+        num_harmonics = int(self.harmonics_slider.get())
 
-        for n in range(1, harmonics + 1):
-            amplitude = (1 - self.tone_slider.get()) if n % 2 == 0 else self.tone_slider.get()
-            amplitude /= n ** self.rolloff_slider.get()
-            waveform += amplitude * np.sin(2 * np.pi * n * self.base_freq_slider.get() * t)
+        # Get the base frequency from the entry box
+        base_freq = float(self.base_freq_entry.get())
 
-        # Apply volume and ADSR envelope
+        # Create the frequency domain representation
+        freqs = np.arange(1, num_harmonics + 1) * base_freq
+        amplitudes = 1 / (np.arange(1, num_harmonics + 1)) ** self.rolloff_slider.get()
+
+        # Apply tone control (balance odd and even harmonics)
+        if self.tone_slider.get() < 0.5:
+            amplitudes[::2] *= (1 - self.tone_slider.get())  # Reduce even harmonics
+        else:
+            amplitudes[1::2] *= self.tone_slider.get()  # Reduce odd harmonics
+
+        # Create the frequency domain array
+        N = int(self.sample_rate * self.duration)  # Use the default duration for FFT
+        freq_domain = np.zeros(N // 2 + 1, dtype=complex)
+
+        # Place the harmonics in the frequency domain
+        for freq, amp in zip(freqs, amplitudes):
+            bin_index = int(freq * N / self.sample_rate)
+            if bin_index < len(freq_domain):
+                freq_domain[bin_index] = amp
+
+        # Perform the IFFT to generate the time-domain waveform
+        waveform = FFT.irfft(freq_domain)
+
+        # Normalize the waveform
+        waveform /= np.max(np.abs(waveform))
+
+        # Apply volume
         waveform *= self.volume_slider.get()
-        adsr_env = self.generate_adsr_envelope(len(waveform))
-        return waveform * adsr_env
 
-    def generate_adsr_envelope(self, num_samples):
-        """Generate an ADSR envelope based on sliders."""
+        # Adjust the waveform to match the desired duration
+        desired_samples = int(self.sample_rate * float(self.duration_entry.get()))
+        if len(waveform) < desired_samples:
+            # Repeat the waveform if it's shorter than the desired duration
+            waveform = np.tile(waveform, int(np.ceil(desired_samples / len(waveform))))
+        waveform = waveform[:desired_samples]  # Truncate to the desired duration
+
+        # Generate the ADSR envelope for the entire desired duration
+        adsr_env = self.generate_adsr_envelope(len(waveform))
+
+        # Apply the ADSR envelope to the waveform
+        waveform *= adsr_env
+
+        return waveform
+
+    def generate_adsr_envelope(self, num_samples: int) -> np.ndarray:
+        """
+        Generate an ADSR envelope based on sliders for the entire duration.
+        """
         attack_samples = int(self.adsr_sliders["attack"].get() * self.sample_rate)
         decay_samples = int(self.adsr_sliders["decay"].get() * self.sample_rate)
-        sustain_samples = num_samples - attack_samples - decay_samples - int(self.adsr_sliders["release"].get() * self.sample_rate)
+        sustain_samples = num_samples - attack_samples - decay_samples - int(
+            self.adsr_sliders["release"].get() * self.sample_rate
+        )
         sustain_level = self.adsr_sliders["sustain"].get()
 
         if sustain_samples < 0:
+            # If the total ADSR time exceeds the duration, scale the times
+            total_adsr_time = attack_samples + decay_samples + int(
+                self.adsr_sliders["release"].get() * self.sample_rate
+            )
+            scale_factor = num_samples / total_adsr_time
+            attack_samples = int(attack_samples * scale_factor)
+            decay_samples = int(decay_samples * scale_factor)
             sustain_samples = 0
 
         envelope = np.concatenate([
-            np.linspace(0, 1, attack_samples),
-            np.linspace(1, sustain_level, decay_samples),
-            np.full(sustain_samples, sustain_level),
-            np.linspace(sustain_level, 0, num_samples - attack_samples - decay_samples - sustain_samples)
+            np.linspace(0, 1, attack_samples),  # Attack
+            np.linspace(1, sustain_level, decay_samples),  # Decay
+            np.full(sustain_samples, sustain_level),  # Sustain
+            np.linspace(sustain_level, 0, num_samples - attack_samples - decay_samples - sustain_samples)  # Release
         ])
         return envelope
-    
+
     def load_preset(self, preset_data):
         """Load a preset and update the UI."""
         if not preset_data:
@@ -221,10 +308,14 @@ class AdditiveSynth:
         print(f"Loading Additive Preset: {preset_data}")
 
         # Update UI with the loaded preset data
-        self.base_freq_slider.set(preset_data["base_frequency"])
+        self.base_freq_entry.delete(0, "end")
+        self.base_freq_entry.insert(0, str(preset_data["base_frequency"]))
+        self.duration_entry.delete(0, "end")
+        self.duration_entry.insert(0, str(preset_data["duration"]))
         self.volume_slider.set(preset_data["volume"])
         self.tone_slider.set(preset_data["tone"])
         self.harmonics_slider.set(preset_data["num_harmonics"])
+        self.harmonics_value_label.configure(text=str(int(preset_data["num_harmonics"])))
 
         # Update ADSR sliders
         self.adsr_sliders["attack"].set(preset_data["adsr"]["attack"])
@@ -234,8 +325,6 @@ class AdditiveSynth:
 
         # Update graphs
         self.update_graphs()
-
-
 
     def play_sound(self):
         """Generate the waveform and play it using SoundDevice."""

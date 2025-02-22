@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import json
+import numpy as np
 
 class ScrollableFrame(ctk.CTkScrollableFrame):
     """A scrollable frame for adding multiple UI elements."""
@@ -77,3 +78,132 @@ class PresetExporterImporter:
         except Exception as e:
             print(f"Error importing preset: {e}")
             return None
+        
+import numpy as np
+import math
+
+import numpy as np
+import math
+
+import numpy as np
+import math
+
+class FFT:
+    @staticmethod
+    def fft(x: np.ndarray) -> np.ndarray:
+        """
+        Compute the Fast Fourier Transform (FFT) of a 1D array using the Cooley-Tukey algorithm.
+        This implementation assumes the input length is a power of two.
+
+        Args:
+            x (np.ndarray): Input array of complex numbers.
+
+        Returns:
+            np.ndarray: The FFT of the input array.
+        """
+        N = len(x)
+        if N <= 1:
+            return x
+
+        # Split into even and odd indices
+        even = FFT.fft(x[::2])
+        odd = FFT.fft(x[1::2])
+
+        # Combine results
+        T = [np.exp(-2j * np.pi * k / N) * odd[k] for k in range(N // 2)]
+        return np.array([even[k] + T[k] for k in range(N // 2)] +
+                        [even[k] - T[k] for k in range(N // 2)])
+
+    @staticmethod
+    def ifft(X: np.ndarray) -> np.ndarray:
+        """
+        Compute the Inverse Fast Fourier Transform (IFFT) of a 1D array.
+        This implementation assumes the input length is a power of two.
+
+        Args:
+            X (np.ndarray): Input array of complex numbers.
+
+        Returns:
+            np.ndarray: The IFFT of the input array.
+        """
+        N = len(X)
+        if N <= 1:
+            return X
+
+        # Split into even and odd indices
+        even = FFT.ifft(X[::2])
+        odd = FFT.ifft(X[1::2])
+
+        # Combine results
+        T = [np.exp(2j * np.pi * k / N) * odd[k] for k in range(N // 2)]
+        return np.array([(even[k] + T[k]) / 2 for k in range(N // 2)] +
+                        [(even[k] - T[k]) / 2 for k in range(N // 2)])
+
+    @staticmethod
+    def rfft(x: np.ndarray) -> np.ndarray:
+        """
+        Compute the real-valued FFT of a 1D array.
+        This implementation matches np.fft.rfft behavior.
+
+        Args:
+            x (np.ndarray): Input array of real numbers.
+
+        Returns:
+            np.ndarray: The real-valued FFT of the input array.
+        """
+        N = len(x)
+        if N <= 1:
+            return np.array([complex(val) for val in x])
+
+        # Convert real input to complex
+        x_complex = np.array([complex(val) for val in x])
+
+        # Compute FFT
+        fft_result = FFT.fft(x_complex)
+
+        # Return only the non-redundant part (first half + 1)
+        return fft_result[:N // 2 + 1]
+    
+    def rfftfreq(n, d=1.0):
+        """
+        Return the Discrete Fourier Transform sample frequencies
+        (for usage with rfft, irfft).
+
+        Args:
+            n (int): Window length.
+            d (float): Sample spacing (inverse of the sampling rate). Default is 1.0.
+
+        Returns:
+            np.ndarray: Array of length n//2 + 1 containing the sample frequencies.
+        """
+        if not isinstance(n, int) or n <= 0:
+            raise ValueError("n must be a positive integer")
+        if not isinstance(d, (int, float)) or d <= 0:
+            raise ValueError("d must be a positive number")
+
+        val = 1.0 / (n * d)
+        N = n // 2 + 1
+        results = np.arange(0, N, dtype=int)
+        return results * val
+
+    @staticmethod
+    def irfft(X: np.ndarray) -> np.ndarray:
+        """
+        Compute the inverse real-valued FFT of a 1D array.
+        This implementation matches np.fft.irfft behavior.
+
+        Args:
+            X (np.ndarray): Input array of complex numbers.
+
+        Returns:
+            np.ndarray: The inverse real-valued FFT of the input array.
+        """
+        N = len(X)
+        if N <= 1:
+            return np.array([complex(val) for val in X])
+
+        # Compute IFFT
+        ifft_result = FFT.ifft(X)
+
+        # Return only the real part
+        return np.real(ifft_result)
