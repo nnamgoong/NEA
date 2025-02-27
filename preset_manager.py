@@ -4,6 +4,7 @@ import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from datetime import datetime
 from utils import MergeSort, PresetExporterImporter
+import scipy.io.wavfile as wavfile
 
 
 class PresetManager:
@@ -174,13 +175,11 @@ class PresetManager:
         ctk.CTkLabel(self.parent, text="Sort by:").pack(pady=5)
         self.sort_menu = ctk.CTkComboBox(self.parent, values=["name", "created_at", "last_updated"], variable=self.sort_var, command=self.refresh_preset_list)
         self.sort_menu.pack(pady=5)
-        
+
         self.preset_listbox = ctk.CTkFrame(self.parent)
         self.preset_listbox.pack(fill="both", expand=True, padx=10, pady=10)
-        
 
-
-        # Add Import/Export buttons
+        # Add Import/Export/Save as WAV buttons
         button_frame = ctk.CTkFrame(self.parent)
         button_frame.pack(fill="x", padx=10, pady=10)
 
@@ -189,6 +188,9 @@ class PresetManager:
 
         import_button = ctk.CTkButton(button_frame, text="Import Preset", command=self.import_preset)
         import_button.pack(side="left", padx=5)
+
+        save_wav_button = ctk.CTkButton(button_frame, text="Save as .WAV", command=self.save_as_wav)
+        save_wav_button.pack(side="left", padx=5)
 
         self.refresh_preset_list()
 
@@ -202,20 +204,10 @@ class PresetManager:
         header_frame = ctk.CTkFrame(self.preset_listbox)
         header_frame.pack(fill="x", padx=5, pady=5)
 
-        # Radio button header (empty for alignment)
-        ctk.CTkLabel(header_frame, text="", width=30).grid(row=0, column=0, padx=5, pady=5)
-
-        # Preset Name header
-        ctk.CTkLabel(header_frame, text="Preset Name", width=150, font=("Arial", 12, "bold")).grid(row=0, column=1, padx=5, pady=5)
-
-        # Synth Type header
-        ctk.CTkLabel(header_frame, text="Synth Type", width=100, font=("Arial", 12, "bold")).grid(row=0, column=2, padx=5, pady=5)
-
-        # Created At header
-        ctk.CTkLabel(header_frame, text="Created At", width=150, font=("Arial", 12, "bold")).grid(row=0, column=3, padx=5, pady=5)
-
-        # Last Updated header
-        ctk.CTkLabel(header_frame, text="Last Updated", width=150, font=("Arial", 12, "bold")).grid(row=0, column=4, padx=5, pady=5)
+        # Column headers
+        headers = ["", "Preset Name", "Synth Type", "Created At", "Last Updated", "Actions"]
+        for col, header in enumerate(headers):
+            ctk.CTkLabel(header_frame, text=header, font=("Arial", 12, "bold")).grid(row=0, column=col, padx=50, pady=5)
 
         # Get the presets sorted by the selected sort type
         presets = self.list_presets(self.sort_var.get())
@@ -258,7 +250,6 @@ class PresetManager:
 
             delete_button = ctk.CTkButton(button_frame, text="Delete", command=lambda n=name: self.delete_preset(n))
             delete_button.pack(side="left", padx=2)
-
     def load_preset(self, preset_name, preset_type):
         """Load the selected preset and apply it to the corresponding synth UI."""
         print(f"Loading preset: {preset_name} ({preset_type})")
@@ -463,3 +454,39 @@ class PresetManager:
             return False
         finally:
             connection.close()
+
+            
+    def save_as_wav(self):
+        """Save the selected preset's waveform as a .WAV file."""
+        selected_preset_name = self.selected_preset_var.get()
+        if not selected_preset_name:
+            print("Error: No preset selected.")
+            return
+
+        # Get the preset type (Additive or Subtractive)
+        preset_type = self.get_preset_type(selected_preset_name)
+        if not preset_type:
+            print("Error: Preset not found.")
+            return
+
+        # Fetch the preset data
+        preset_data = self.load_preset_data(selected_preset_name, preset_type)
+        if not preset_data:
+            print("Error: Preset not found.")
+            return
+
+        # Generate the waveform
+        if preset_type == "Additive":
+            waveform = self.app.additive_synth.generate_waveform()
+        elif preset_type == "Subtractive":
+            waveform = self.app.subtractive_synth.generate_waveform()
+        else:
+            print("Error: Unknown preset type.")
+            return
+
+        # Prompt the user to choose a file path
+        file_path = filedialog.asksaveasfilename(defaultextension=".wav", filetypes=[("WAV Files", "*.wav")])
+        if file_path:
+            # Save the waveform as a .WAV file
+            wavfile.write(file_path, self.app.sample_rate, waveform)
+            print(f"Waveform saved as {file_path}")

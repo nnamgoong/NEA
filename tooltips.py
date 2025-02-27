@@ -2,10 +2,11 @@ import tkinter as tk
 
 class Tooltip:
     """A reusable tooltip widget for providing additional context."""
+    active_tooltip = None  # Track the currently active tooltip
+
     def __init__(self, widget, text):
         self.widget = widget
         self.text = text
-        print(f"Tooltip created for {widget}: {text}")  # Debug print
         self.tooltip = None
 
         # Bind events
@@ -14,8 +15,8 @@ class Tooltip:
 
     def show_tooltip(self, event):
         """Display the tooltip."""
-        if self.tooltip:
-            return  # Tooltip already visible
+        if Tooltip.active_tooltip:
+            Tooltip.active_tooltip.hide_tooltip(None)  # Hide the current tooltip
 
         # Calculate tooltip position
         x, y, _, _ = self.widget.bbox("insert")
@@ -30,19 +31,21 @@ class Tooltip:
         # Add text to the tooltip
         label = tk.Label(
             self.tooltip,
-            text=self.text,  # Ensure this uses the correct tooltip text
+            text=self.text,
             justify="left",
-            background="lightyellow",  # Ensure the background contrasts the text
+            background="lightyellow",
             relief="solid",
             borderwidth=1,
             font=("Arial", 10),
-            fg="black",  # Set text color explicitly
+            fg="black",
         )
         label.pack(ipadx=5, ipady=5)
+
+        Tooltip.active_tooltip = self  # Set this tooltip as active
 
     def hide_tooltip(self, event):
         """Hide the tooltip."""
         if self.tooltip:
             self.tooltip.destroy()
             self.tooltip = None
-
+            Tooltip.active_tooltip = None  # Clear the active tooltip
