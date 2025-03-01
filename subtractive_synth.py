@@ -56,24 +56,13 @@ class SubtractiveSynth:
         self.scrollable_frame = ScrollableFrame(self.controls_frame, width=450)  # Match width to controls_frame
         self.scrollable_frame.pack(fill="both", expand=True, pady=(0, 10))
 
-        # Oscillator Controls
-        ctk.CTkLabel(self.scrollable_frame, text="Oscillators", font=("Arial", 16)).pack(pady=5)
-        self.oscillators_frame = ctk.CTkFrame(self.scrollable_frame)
-        self.oscillators_frame.pack(fill="both", expand=True)
-        self.add_oscillator_button = ctk.CTkButton(
-            self.scrollable_frame, text="Add Oscillator", command=self.add_oscillator
-        )
-        self.add_oscillator_button.pack(pady=10)
-
-
-        # Filter Controls
-        ctk.CTkLabel(self.scrollable_frame, text="Filters", font=("Arial", 16)).pack(pady=5)
-        self.filters_frame = ctk.CTkFrame(self.scrollable_frame)
-        self.filters_frame.pack(fill="both", expand=True)
-        self.add_filter_button = ctk.CTkButton(
-            self.scrollable_frame, text="Add Filter", command=self.add_filter
-        )
-        self.add_filter_button.pack(pady=10)
+        # Add duration input
+        self.duration_label = ctk.CTkLabel(self.scrollable_frame, text="Duration (seconds)")
+        self.duration_label.pack(pady=(10, 0))
+        self.duration_entry = ctk.CTkEntry(self.scrollable_frame)
+        self.duration_entry.insert(0, str(self.duration))  # Set default duration
+        self.duration_entry.pack(pady=5)
+        Tooltip(self.duration_entry, "Set the duration of the sound in seconds.")
 
         # Volume Slider with Label
         volume_frame = ctk.CTkFrame(self.scrollable_frame)
@@ -84,6 +73,26 @@ class SubtractiveSynth:
         )
         self.volume_slider.set(self.volume)
         self.volume_slider.pack(side="right", fill="x", expand=True)
+        Tooltip(self.volume_slider, "Adjust the overall volume of the sound.")
+
+        # Oscillator Controls
+        ctk.CTkLabel(self.scrollable_frame, text="Oscillators", font=("Arial", 16)).pack(pady=5)
+        self.oscillators_frame = ctk.CTkFrame(self.scrollable_frame)
+        self.oscillators_frame.pack(fill="both", expand=True)
+        self.add_oscillator_button = ctk.CTkButton(
+            self.scrollable_frame, text="Add Oscillator", command=self.add_oscillator
+        )
+        self.add_oscillator_button.pack(pady=10)
+
+        # Filter Controls
+        ctk.CTkLabel(self.scrollable_frame, text="Filters", font=("Arial", 16)).pack(pady=5)
+        self.filters_frame = ctk.CTkFrame(self.scrollable_frame)
+        self.filters_frame.pack(fill="both", expand=True)
+        self.add_filter_button = ctk.CTkButton(
+            self.scrollable_frame, text="Add Filter", command=self.add_filter
+        )
+        self.add_filter_button.pack(pady=10)
+
 
         # Static Play Button
         self.play_button = ctk.CTkButton(
@@ -114,11 +123,10 @@ class SubtractiveSynth:
         )
         self.add_lfo_button.pack(pady=10)
 
-
+        # Save Preset Button
         self.save_preset_button = ctk.CTkButton(self.controls_frame, text="Save Preset", command=self.save_current_preset)
         self.save_preset_button.pack(pady=10)
 
-         
         # Initial Graph Update
         self.update_graphs()
 
@@ -179,32 +187,30 @@ class SubtractiveSynth:
         # Filter type dropdown with tooltip
         ctk.CTkLabel(filter_frame, text="Type").grid(row=0, column=0, padx=5, pady=5, sticky="w")
         type_menu = ctk.CTkComboBox(
-            filter_frame,
-            values=["Low-pass", "High-pass", "Band-pass", "Band-reject"],
-            command=lambda _: self.debounced_update()
+            filter_frame, values=["Low-pass", "High-pass", "Band-pass", "Band-reject"],
+            command=lambda value: self.update_filter_ui(value, filter_frame)
         )
         type_menu.set(filter_type)
         type_menu.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
 
-        # Add tooltip for the filter type
-        Tooltip(type_menu, "Select the type of filter to apply.")
+        # Add tooltip for the filter type combobox
+        self.filter_type_tooltip = Tooltip(type_menu, "Select the type of filter to apply.")
 
-        # Update tooltip text dynamically when filter type changes
-        type_menu.configure(command=lambda value: self.update_filter_tooltip(value, type_menu))
-
-        # Other filter controls (cutoff, resonance, etc.)
+        # Cutoff frequency slider with tooltip
         ctk.CTkLabel(filter_frame, text="Cutoff Frequency (Hz)").grid(row=1, column=0, padx=5, pady=5, sticky="w")
         freq_slider = ctk.CTkSlider(filter_frame, from_=20, to=10000, command=lambda _: self.debounced_update())
         freq_slider.set(cutoff)
         freq_slider.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
-        Tooltip(freq_slider, "Adjust the cutoff frequency of the filter.")
+        Tooltip(freq_slider, "Set the cutoff frequency of the filter.")
 
+        # Resonance slider with tooltip
         ctk.CTkLabel(filter_frame, text="Resonance").grid(row=2, column=0, padx=5, pady=5, sticky="w")
         res_slider = ctk.CTkSlider(filter_frame, from_=0.1, to=10, command=lambda _: self.debounced_update())
         res_slider.set(resonance)
         res_slider.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
-        Tooltip(res_slider, "Adjust the resonance (emphasis) of the filter.")
+        Tooltip(res_slider, "Set the resonance (emphasis) of the filter.")
 
+        # Remove button with tooltip
         remove_button = ctk.CTkButton(filter_frame, text="Remove", command=lambda: self.remove_filter(filter_frame))
         remove_button.grid(row=3, column=0, columnspan=2, pady=5)
         Tooltip(remove_button, "Remove this filter.")
@@ -217,15 +223,8 @@ class SubtractiveSynth:
         })
         self.debounced_update()
 
-    def update_filter_tooltip(self, filter_type, type_menu):
-        """Update the tooltip text based on the selected filter type."""
-        tooltip_text = {
-            "Low-pass": "Allows frequencies below the cutoff to pass, attenuating higher frequencies.",
-            "High-pass": "Allows frequencies above the cutoff to pass, attenuating lower frequencies.",
-            "Band-pass": "Allows frequencies within a specific range to pass, attenuating others.",
-            "Band-reject": "Attenuates frequencies within a specific range, allowing others to pass."
-        }
-        Tooltip(type_menu, tooltip_text.get(filter_type, "Select a filter type."))
+        # Update filter UI for the initial filter type
+        self.update_filter_ui(filter_type, filter_frame)
 
 
     def remove_filter(self, filter_frame):
@@ -248,22 +247,20 @@ class SubtractiveSynth:
         type_menu = ctk.CTkComboBox(
             effect_frame,
             values=["Bitcrusher", "Ring Modulation", "Phaser", "Flanger", "Wavefolder", "Chorus"],
-            command=lambda value: self.update_effect_params(value, params_frame, params or {}, type_menu)
+            command=lambda value: self.update_effect_ui(value, params_frame, params or {}, type_menu)
         )
         type_menu.set(effect_type)
         type_menu.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
 
-        # Add tooltip for the effect type
-        Tooltip(type_menu, "Select the type of effect to apply.")
-
-        # Update tooltip text dynamically when effect type changes
-        type_menu.configure(command=lambda value: self.update_effect_tooltip(value, type_menu))
+        # Add tooltip for the effect type combobox
+        self.effect_type_tooltip = Tooltip(type_menu, "Select the type of effect to apply.")
 
         params_frame = ctk.CTkFrame(effect_frame)
         params_frame.grid(row=1, column=0, columnspan=2, pady=5, sticky="ew")
 
         remove_button = ctk.CTkButton(effect_frame, text="Remove", command=lambda: self.remove_effect(effect_frame))
         remove_button.grid(row=2, column=0, columnspan=2, pady=5)
+        Tooltip(remove_button, "Remove this effect.")
 
         # Initialize params as an empty dictionary if it is None
         if params is None:
@@ -275,12 +272,13 @@ class SubtractiveSynth:
             "params": params,
         })
 
-        self.update_effect_params(effect_type, params_frame, params, type_menu)
+        # Update effect UI for the initial effect type
+        self.update_effect_ui(effect_type, params_frame, params, type_menu)
 
-        
-    def update_effect_tooltip(self, effect_type, type_menu):
-        """Update the tooltip text based on the selected effect type."""
-        tooltip_text = {
+    def update_effect_ui(self, effect_type, params_frame, params, type_menu):
+        """Update the effect UI, including tooltips, based on the selected effect type."""
+        # Update the tooltip for the effect type combobox
+        effect_type_tooltips = {
             "Bitcrusher": "Reduces the bit depth and sample rate of the audio, creating a lo-fi effect.",
             "Ring Modulation": "Multiplies the audio signal with a sine wave, creating metallic or bell-like tones.",
             "Phaser": "Creates a sweeping, swirling effect by modulating phase shifts across frequencies.",
@@ -288,64 +286,9 @@ class SubtractiveSynth:
             "Wavefolder": "Folds the waveform back onto itself, creating harmonic distortion.",
             "Chorus": "Simulates multiple voices by layering detuned copies of the signal."
         }
-        Tooltip(type_menu, tooltip_text.get(effect_type, "Select an effect type."))
+        if hasattr(self, "effect_type_tooltip"):
+            self.effect_type_tooltip.update_text(effect_type_tooltips.get(effect_type, "Select the type of effect to apply."))
 
-
-    def add_lfo(self, shape="Sine", frequency=1.0, depth=0.5, target="Frequency"):
-        """Add a new LFO with optional preset values."""
-        lfo_frame = ctk.CTkFrame(self.lfos_frame)
-        lfo_frame.pack(fill="x", pady=5)
-
-        ctk.CTkLabel(lfo_frame, text="Shape").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        shape_menu = ctk.CTkComboBox(
-            lfo_frame, values=["Sine", "Square", "Triangle", "Sawtooth"],
-            command=lambda _: self.debounced_update()
-        )
-        shape_menu.set(shape)
-        shape_menu.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-
-        ctk.CTkLabel(lfo_frame, text="Frequency (Hz)").grid(row=1, column=0, padx=5, pady=5, sticky="w")
-        freq_entry = ctk.CTkEntry(lfo_frame, width=100)
-        freq_entry.insert(0, str(frequency))
-        freq_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
-
-        ctk.CTkLabel(lfo_frame, text="Depth").grid(row=2, column=0, padx=5, pady=5, sticky="w")
-        depth_slider = ctk.CTkSlider(lfo_frame, from_=0.0, to=2.0, command=lambda _: self.debounced_update())
-        depth_slider.set(depth)
-        depth_slider.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
-
-        ctk.CTkLabel(lfo_frame, text="Target").grid(row=3, column=0, padx=5, pady=5, sticky="w")
-        target_menu = ctk.CTkComboBox(
-            lfo_frame, values=["Frequency", "Amplitude", "Filter Cutoff"],
-            command=lambda _: self.debounced_update()
-        )
-        target_menu.set(target)
-        target_menu.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
-
-        self.lfos.append({
-            "frame": lfo_frame,
-            "shape": shape_menu,
-            "frequency": freq_entry,
-            "depth": depth_slider,
-            "target": target_menu,
-        })
-        self.debounced_update()
-        remove_button = ctk.CTkButton(lfo_frame, text="Remove", command=lambda: self.remove_lfo(lfo_frame))
-        remove_button.grid(row=4, column=0, columnspan=2, pady=5)
-        self.debounced_update()
-
-
-    def remove_lfo(self, lfo_frame):
-        """Remove an LFO from the controls."""
-        for lfo in self.lfos:
-            if lfo["frame"] == lfo_frame:
-                self.lfos.remove(lfo)
-                break
-        lfo_frame.destroy()
-        self.debounced_update()
-
-    def update_effect_params(self, effect_type, params_frame, params, type_menu):
-        """Update effect parameter UI based on the selected effect type and dynamically update stored values."""
         # Clear existing UI elements
         for widget in params_frame.winfo_children():
             widget.destroy()
@@ -360,28 +303,28 @@ class SubtractiveSynth:
         # Effect parameter definitions
         effect_parameters = {
             "Bitcrusher": [
-                ("Bit Depth", "bit_depth", 1, 16, 1),
-                ("Sample Rate Reduction", "sample_rate_reduction", 1, 16, 1),
+                ("Bit Depth", "bit_depth", 1, 16, 1, "Reduces the bit depth of the audio, creating a lo-fi effect."),
+                ("Sample Rate Reduction", "sample_rate_reduction", 1, 16, 1, "Reduces the sample rate of the audio, creating a gritty effect."),
             ],
             "Ring Modulation": [
-                ("Modulation Frequency (Hz)", "mod_freq", 20, 2000, 1),
+                ("Modulation Frequency (Hz)", "mod_freq", 20, 2000, 1, "Set the frequency of the ring modulation effect."),
             ],
             "Phaser": [
-                ("Number of Stages", "num_stages", 1, 8, 1),
-                ("Sweep Frequency (Hz)", "sweep_freq", 0.1, 5.0, 0.1),
-                ("Depth", "depth", 0.0, 1.0, 0.1),
+                ("Number of Stages", "num_stages", 1, 8, 1, "Set the number of stages in the phaser effect."),
+                ("Sweep Frequency (Hz)", "sweep_freq", 0.1, 5.0, 0.1, "Set the frequency of the phaser sweep."),
+                ("Depth", "depth", 0.0, 1.0, 0.1, "Set the depth of the phaser effect."),
             ],
             "Flanger": [
-                ("Max Delay (ms)", "max_delay", 1, 20, 1),
-                ("Rate (Hz)", "rate", 0.1, 2.0, 0.1),
+                ("Max Delay (ms)", "max_delay", 1, 20, 1, "Set the maximum delay time for the flanger effect."),
+                ("Rate (Hz)", "rate", 0.1, 2.0, 0.1, "Set the rate of the flanger modulation."),
             ],
             "Wavefolder": [
-                ("Threshold", "threshold", 0.1, 1.0, 0.1),
+                ("Threshold", "threshold", 0.1, 1.0, 0.1, "Set the threshold for wavefolding distortion."),
             ],
             "Chorus": [
-                ("Detune Amount", "detune", 0.01, 0.1, 0.01),
-                ("Delay (ms)", "delay", 1, 20, 1),
-                ("Voices", "voices", 2, 8, 1),
+                ("Detune Amount", "detune", 0.01, 0.1, 0.01, "Set the amount of detuning for the chorus effect."),
+                ("Delay (ms)", "delay", 1, 20, 1, "Set the delay time for the chorus effect."),
+                ("Voices", "voices", 2, 8, 1, "Set the number of voices for the chorus effect."),
             ]
         }
 
@@ -390,9 +333,11 @@ class SubtractiveSynth:
             return
 
         # Add sliders for each parameter
-        for row, (label, param_key, min_val, max_val, step) in enumerate(effect_parameters[effect_type]):
+        for row, (label, param_key, min_val, max_val, step, tooltip_text) in enumerate(effect_parameters[effect_type]):
+            # Add label for the parameter
             ctk.CTkLabel(params_frame, text=label).grid(row=row, column=0, padx=5, pady=5, sticky="w")
 
+            # Add slider for the parameter
             slider = ctk.CTkSlider(
                 params_frame,
                 from_=min_val,
@@ -402,6 +347,9 @@ class SubtractiveSynth:
             slider.set(params.get(param_key, min_val))  # Set to stored value or default
             slider.grid(row=row, column=1, padx=5, pady=5, sticky="ew")
 
+            # Add tooltip for the slider
+            Tooltip(slider, tooltip_text)
+
             # Update params directly when slider changes
             slider.configure(command=lambda _, key=param_key, s=slider: params.update({key: s.get()}))
 
@@ -409,6 +357,112 @@ class SubtractiveSynth:
             params[param_key] = slider.get()
 
         params_frame.update_idletasks()
+                
+
+
+    def update_filter_ui(self, filter_type, filter_frame):
+        """Update the filter UI, including tooltips, based on the selected filter type."""
+        # Update the tooltip for the filter type combobox
+        filter_type_tooltips = {
+            "Low-pass": "Allows frequencies below the cutoff to pass, attenuating higher frequencies.",
+            "High-pass": "Allows frequencies above the cutoff to pass, attenuating lower frequencies.",
+            "Band-pass": "Allows frequencies within a specific range to pass, attenuating others.",
+            "Band-reject": "Attenuates frequencies within a specific range, allowing others to pass."
+        }
+        if hasattr(self, "filter_type_tooltip"):
+            self.filter_type_tooltip.update_text(filter_type_tooltips.get(filter_type, "Select the type of filter to apply."))
+
+        # Update tooltips for frequency and resonance sliders
+        filter_tooltips = {
+            "Low-pass": {
+                "frequency": "Set the cutoff frequency for the low-pass filter (allows frequencies below this value).",
+                "resonance": "Set the resonance (emphasis) for the low-pass filter."
+            },
+            "High-pass": {
+                "frequency": "Set the cutoff frequency for the high-pass filter (allows frequencies above this value).",
+                "resonance": "Set the resonance (emphasis) for the high-pass filter."
+            },
+            "Band-pass": {
+                "frequency": "Set the center frequency for the band-pass filter (allows frequencies around this value).",
+                "resonance": "Set the resonance (emphasis) for the band-pass filter."
+            },
+            "Band-reject": {
+                "frequency": "Set the center frequency for the band-reject filter (attenuates frequencies around this value).",
+                "resonance": "Set the resonance (emphasis) for the band-reject filter."
+            }
+        }
+
+        # Update tooltips for frequency and resonance sliders
+        for widget in filter_frame.winfo_children():
+            if isinstance(widget, ctk.CTkSlider):
+                if "Frequency" in str(widget):
+                    Tooltip(widget, filter_tooltips[filter_type]["frequency"])
+                elif "Resonance" in str(widget):
+                    Tooltip(widget, filter_tooltips[filter_type]["resonance"])
+
+
+
+    def add_lfo(self, shape="Sine", frequency=1.0, depth=0.5, target="Frequency"):
+        """Add a new LFO with optional preset values."""
+        lfo_frame = ctk.CTkFrame(self.lfos_frame)
+        lfo_frame.pack(fill="x", pady=5)
+
+        # LFO shape dropdown with tooltip
+        ctk.CTkLabel(lfo_frame, text="Shape").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        shape_menu = ctk.CTkComboBox(
+            lfo_frame, values=["Sine", "Square", "Triangle", "Sawtooth"],
+            command=lambda _: self.debounced_update()
+        )
+        shape_menu.set(shape)
+        shape_menu.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        Tooltip(shape_menu, "Select the waveform shape for the LFO.")
+
+        # LFO frequency entry with tooltip
+        ctk.CTkLabel(lfo_frame, text="Frequency (Hz)").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        freq_entry = ctk.CTkEntry(lfo_frame, width=100)
+        freq_entry.insert(0, str(frequency))
+        freq_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        Tooltip(freq_entry, "Set the frequency of the LFO in Hz.")
+
+        # LFO depth slider with tooltip
+        ctk.CTkLabel(lfo_frame, text="Depth").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        depth_slider = ctk.CTkSlider(lfo_frame, from_=0.0, to=2.0, command=lambda _: self.debounced_update())
+        depth_slider.set(depth)
+        depth_slider.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
+        Tooltip(depth_slider, "Set the depth (strength) of the LFO modulation.")
+
+        # LFO target dropdown with tooltip
+        ctk.CTkLabel(lfo_frame, text="Target").grid(row=3, column=0, padx=5, pady=5, sticky="w")
+        target_menu = ctk.CTkComboBox(
+            lfo_frame, values=["Frequency", "Amplitude", "Filter Cutoff"],
+            command=lambda _: self.debounced_update()
+        )
+        target_menu.set(target)
+        target_menu.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
+        Tooltip(target_menu, "Select the parameter to modulate with the LFO.")
+
+        # Remove button with tooltip
+        remove_button = ctk.CTkButton(lfo_frame, text="Remove", command=lambda: self.remove_lfo(lfo_frame))
+        remove_button.grid(row=4, column=0, columnspan=2, pady=5)
+        Tooltip(remove_button, "Remove this LFO.")
+
+        self.lfos.append({
+            "frame": lfo_frame,
+            "shape": shape_menu,
+            "frequency": freq_entry,
+            "depth": depth_slider,
+            "target": target_menu,
+        })
+        self.debounced_update()
+
+    def remove_lfo(self, lfo_frame):
+        """Remove an LFO from the controls."""
+        for lfo in self.lfos:
+            if lfo["frame"] == lfo_frame:
+                self.lfos.remove(lfo)
+                break
+        lfo_frame.destroy()
+        self.debounced_update()
 
 
     def remove_effect(self, effect_frame):
@@ -419,7 +473,6 @@ class SubtractiveSynth:
                 break
         effect_frame.destroy()
         self.debounced_update()
-
 
 
     def debounced_update(self, *args):
@@ -452,7 +505,7 @@ class SubtractiveSynth:
         # Update Waveform Graph
         self.wave_ax.clear()
         self.wave_ax.plot(t[:end_index], waveform[:end_index], label="Raw Waveform", alpha=0.7)
-        self.wave_ax.plot(t[:end_index], filtered_waveform[:end_index], label="Filtered Waveform", alpha=0.7)
+
         self.wave_ax.set_title("Waveform")
         self.wave_ax.legend()
         self.wave_ax.grid(True)
@@ -470,7 +523,8 @@ class SubtractiveSynth:
 
     def generate_waveform(self):
         """Generate waveform with LFO-modulated parameters."""
-        t = np.linspace(0, self.duration, int(self.sample_rate * self.duration), endpoint=False)
+        duration = float(self.duration_entry.get())  # Get duration from the input field
+        t = np.linspace(0, duration, int(self.sample_rate * duration), endpoint=False)
         waveform = np.zeros_like(t)
 
         for osc in self.oscillators:
@@ -503,7 +557,7 @@ class SubtractiveSynth:
             elif waveform_type == "Sawtooth":
                 waveform += modulated_amp * (2 * (phase / (2 * np.pi) % 1) - 1)
             elif waveform_type == "Triangle":
-                waveform += modulated_amp * (2 * np.abs(2 * (phase / (2 * np.pi) % 1) - 1) - 1)
+                waveform += modulated_amp * (2 * np.abs(2 * (phase / (2 * np.pi) % 1) - 1))
 
         # Normalize waveform
         max_val = np.max(np.abs(waveform))
@@ -512,29 +566,6 @@ class SubtractiveSynth:
 
         # Apply master volume
         return waveform * self.volume_slider.get()
-
-
-
-
-
-    def band_limited_square(self, freq, t):
-        """Generate a square wave using direct value switching."""
-        # Calculate phase as a function of frequency and time
-        phase = (t * freq) % 1  # Phase cycles between 0 and 1
-        return np.where(phase < 0.5, 1.0, -1.0)  # Switch between +1 and -1
-
-
-    def band_limited_sawtooth(self, freq, t):
-        """Generate a sawtooth wave."""
-        phase = (t * freq) % 1  # Normalized phase
-        return 2 * (phase - 0.5)  # Linearly decreasing sawtooth
-
-
-    def band_limited_triangle(self, freq, t):
-        """Generate a triangle wave."""
-        phase = (t * freq) % 1  # Normalized phase
-        return 2 * np.abs(2 * phase - 1) - 1  # Linear triangle shape
-
 
 
 
@@ -614,9 +645,6 @@ class SubtractiveSynth:
             modulation += mod_signal  # Combine signals if multiple LFOs target the same parameter
 
         return modulation
-
-
-
 
     def lowpass_filter(self, waveform, cutoff, resonance):
         nyquist = 0.5 * self.sample_rate

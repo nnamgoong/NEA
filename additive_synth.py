@@ -81,6 +81,7 @@ class AdditiveSynth:
         self.rolloff_slider = self.add_slider(self.scrollable_frame, "Harmonic Roll-Off", 0.1, 2.0, 1.0)
         Tooltip(self.rolloff_slider, "Alters the rate at which the harmonics decrease in amplitude, can create a more subtle sound.")
 
+        """Initialize the UI."""
         # ADSR Controls
         for param in ["Attack", "Decay", "Sustain", "Release"]:
             slider = self.add_slider(
@@ -92,6 +93,16 @@ class AdditiveSynth:
             )
             self.adsr_sliders[param.lower()] = slider
 
+            # Add tooltips for ADSR sliders
+            if param == "Attack":
+                Tooltip(slider, "Set the attack time (how quickly the sound reaches full volume).")
+            elif param == "Decay":
+                Tooltip(slider, "Set the decay time (how quickly the sound drops to the sustain level).")
+            elif param == "Sustain":
+                Tooltip(slider, "Set the sustain level (the volume during the sustain phase).")
+            elif param == "Release":
+                Tooltip(slider, "Set the release time (how quickly the sound fades out after releasing a note).")
+                
         # Play Button (outside the scrollable frame)
         self.play_button = ctk.CTkButton(self.controls_frame, text="Play Sound", command=self.play_sound)
         self.play_button.pack(side="bottom", pady=10)
@@ -228,10 +239,17 @@ class AdditiveSynth:
         amplitudes = 1 / (np.arange(1, num_harmonics + 1)) ** self.rolloff_slider.get()
 
         # Apply tone control (balance odd and even harmonics)
-        if self.tone_slider.get() < 0.5:
-            amplitudes[::2] *= (1 - self.tone_slider.get())  # Reduce even harmonics
+        tone_value = self.tone_slider.get()
+
+        # Enhanced tone control: Apply a nonlinear scaling factor
+        if tone_value < 0.5:
+            # Reduce even harmonics more aggressively
+            even_reduction = 1 - (tone_value * 2)  # Scale from 1 to 0 as tone_value goes from 0 to 0.5
+            amplitudes[::2] *= even_reduction ** 2  # Square the reduction for a more pronounced effect
         else:
-            amplitudes[1::2] *= self.tone_slider.get()  # Reduce odd harmonics
+            # Reduce odd harmonics more aggressively
+            odd_reduction = (tone_value - 0.5) * 2  # Scale from 0 to 1 as tone_value goes from 0.5 to 1
+            amplitudes[1::2] *= odd_reduction ** 2  # Square the reduction for a more pronounced effect
 
         # Create the frequency domain array
         N = int(self.sample_rate * self.duration)  # Use the default duration for FFT

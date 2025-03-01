@@ -11,25 +11,25 @@ class ScrollableFrame(ctk.CTkScrollableFrame):
 
 class MergeSort:
     @staticmethod
-    def sort(arr, key):
+    def sort(arr, key, reverse=False):
         """Sort an array of tuples based on a specific key using merge sort."""
         if len(arr) <= 1:
             return arr
 
         mid = len(arr) // 2
-        left = MergeSort.sort(arr[:mid], key)
-        right = MergeSort.sort(arr[mid:], key)
+        left = MergeSort.sort(arr[:mid], key, reverse)
+        right = MergeSort.sort(arr[mid:], key, reverse)
 
-        return MergeSort.merge(left, right, key)
+        return MergeSort.merge(left, right, key, reverse)
 
     @staticmethod
-    def merge(left, right, key):
+    def merge(left, right, key, reverse):
         """Merge two sorted lists."""
         sorted_list = []
         i = j = 0
 
         while i < len(left) and j < len(right):
-            if key(left[i]) < key(right[j]):
+            if (key(left[i]) < key(right[j])) if not reverse else (key(left[i]) > key(right[j])):
                 sorted_list.append(left[i])
                 i += 1
             else:
@@ -39,7 +39,6 @@ class MergeSort:
         sorted_list.extend(left[i:])
         sorted_list.extend(right[j:])
         return sorted_list
-
 
 class PresetExporterImporter:
     @staticmethod

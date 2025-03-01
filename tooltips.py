@@ -29,7 +29,7 @@ class Tooltip:
         self.tooltip.wm_geometry(f"+{x}+{y}")
 
         # Add text to the tooltip
-        label = tk.Label(
+        self.label = tk.Label(
             self.tooltip,
             text=self.text,
             justify="left",
@@ -39,7 +39,7 @@ class Tooltip:
             font=("Arial", 10),
             fg="black",
         )
-        label.pack(ipadx=5, ipady=5)
+        self.label.pack(ipadx=5, ipady=5)
 
         Tooltip.active_tooltip = self  # Set this tooltip as active
 
@@ -49,3 +49,9 @@ class Tooltip:
             self.tooltip.destroy()
             self.tooltip = None
             Tooltip.active_tooltip = None  # Clear the active tooltip
+
+    def update_text(self, new_text):
+        """Update the tooltip text dynamically."""
+        self.text = new_text
+        if self.tooltip:
+            self.label.config(text=self.text)

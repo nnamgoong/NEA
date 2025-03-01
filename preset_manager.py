@@ -77,7 +77,7 @@ class PresetManager:
                     cursor.execute("DELETE FROM SubtractivePresetLFOs WHERE preset_id = ?", (preset_id,))
 
                     # Save updated components
-                    self._save_subtractive_components(cursor, preset_id, preset_data)
+                    self.save_subtractive_components(cursor, preset_id, preset_data)
                 else:
                     # Insert new preset
                     cursor.execute("""
@@ -89,7 +89,7 @@ class PresetManager:
                     preset_id = cursor.lastrowid
 
                     # Save oscillators, filters, effects, and LFOs
-                    self._save_subtractive_components(cursor, preset_id, preset_data)
+                    self.save_subtractive_components(cursor, preset_id, preset_data)
 
             connection.commit()
             print(f"Preset '{preset_name}' {'updated' if preset_exists else 'saved'} successfully!")
@@ -103,7 +103,46 @@ class PresetManager:
 
 
 
-                
+    def save_subtractive_components(self, cursor, preset_id, preset_data):
+        """Save the oscillators, filters, effects, and LFOs for a subtractive synthesizer preset."""
+        # Save oscillators
+        for osc in preset_data.get("oscillators", []):
+            cursor.execute("""
+                INSERT INTO SubtractivePresetOscillators (preset_id, type, frequency, amplitude)
+                VALUES (?, ?, ?, ?)
+            """, (preset_id, osc["type"], osc["frequency"], osc["amplitude"]))
+
+        # Save filters
+        for filt in preset_data.get("filters", []):
+            cursor.execute("""
+                INSERT INTO SubtractivePresetFilters (preset_id, filter_type, cutoff_frequency, resonance)
+                VALUES (?, ?, ?, ?)
+            """, (preset_id, filt["type"], filt["cutoff"], filt["resonance"]))
+
+        # Save effects
+        for effect in preset_data.get("effects", []):
+            # Insert the effect into the Effects table if it doesn't exist
+            cursor.execute("""
+                INSERT OR IGNORE INTO Effects (name)
+                VALUES (?)
+            """, (effect["type"],))
+
+            # Get the effect ID
+            cursor.execute("SELECT Eid FROM Effects WHERE name = ?", (effect["type"],))
+            effect_id = cursor.fetchone()[0]
+
+            # Save the effect parameters
+            cursor.execute("""
+                INSERT INTO SubtractivePresetEffects (preset_id, effect_id, parameters)
+                VALUES (?, ?, ?)
+            """, (preset_id, effect_id, json.dumps(effect["params"])))
+
+        # Save LFOs
+        for lfo in preset_data.get("lfos", []):
+            cursor.execute("""
+                INSERT INTO SubtractivePresetLFOs (preset_id, shape, frequency, depth, target)
+                VALUES (?, ?, ?, ?, ?)
+            """, (preset_id, lfo["shape"], lfo["frequency"], lfo["depth"], lfo["target"]))             
     def list_presets(self, sort_by="name"):
         """Retrieve a sorted list of all presets for the user."""
         connection = sqlite3.connect(self.db_path)
@@ -130,16 +169,16 @@ class PresetManager:
 
         connection.close()
 
-        # Sort the presets based on the selected sort type
+        # Sort the presets based on the selected sort type using MergeSort
         if sort_by == "name":
-            presets = sorted(presets, key=lambda x: x[0])  # Sort by name (ascending)
+            presets = MergeSort.sort(presets, key=lambda x: x[0])  # Sort by name (ascending)
         elif sort_by == "created_at":
-            presets = sorted(presets, key=lambda x: x[2], reverse=True)  # Sort by creation date (latest first)
+            presets = MergeSort.sort(presets, key=lambda x: x[2], reverse=True)  # Sort by creation date (latest first)
         elif sort_by == "last_updated":
-            presets = sorted(presets, key=lambda x: x[3], reverse=True)  # Sort by last updated date (latest first)
+            presets = MergeSort.sort(presets, key=lambda x: x[3], reverse=True)  # Sort by last updated date (latest first)
 
         return presets
-    
+        
 
     def delete_preset(self, preset_name):
         """Delete a preset by name after confirming with the user."""
