@@ -434,7 +434,7 @@ class SubtractiveSynth:
         # LFO target dropdown with tooltip
         ctk.CTkLabel(lfo_frame, text="Target").grid(row=3, column=0, padx=5, pady=5, sticky="w")
         target_menu = ctk.CTkComboBox(
-            lfo_frame, values=["Frequency", "Amplitude", "Filter Cutoff"],
+            lfo_frame, values=["Frequency", "Amplitude"],
             command=lambda _: self.debounced_update()
         )
         target_menu.set(target)

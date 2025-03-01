@@ -5,6 +5,7 @@ from tkinter import filedialog, messagebox
 from datetime import datetime
 from utils import MergeSort, PresetExporterImporter
 import scipy.io.wavfile as wavfile
+from utils import ScrollableFrame
 
 
 class PresetManager:
@@ -207,7 +208,7 @@ class PresetManager:
         # Refresh the preset list after deleting
         self.refresh_preset_list()
 
-            
+                
     def create_preset_ui(self):
         """Create the UI for managing presets inside the Presets tab."""
         self.sort_var = ctk.StringVar(value="name")
@@ -215,8 +216,13 @@ class PresetManager:
         self.sort_menu = ctk.CTkComboBox(self.parent, values=["name", "created_at", "last_updated"], variable=self.sort_var, command=self.refresh_preset_list)
         self.sort_menu.pack(pady=5)
 
-        self.preset_listbox = ctk.CTkFrame(self.parent)
-        self.preset_listbox.pack(fill="both", expand=True, padx=10, pady=10)
+        # Create a scrollable frame for the preset list
+        self.scrollable_preset_frame = ScrollableFrame(self.parent, width=450, height=300)  # Adjust width and height as needed
+        self.scrollable_preset_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Add the preset listbox inside the scrollable frame
+        self.preset_listbox = ctk.CTkFrame(self.scrollable_preset_frame)
+        self.preset_listbox.pack(fill="both", expand=True)
 
         # Add Import/Export/Save as WAV buttons
         button_frame = ctk.CTkFrame(self.parent)
@@ -289,6 +295,7 @@ class PresetManager:
 
             delete_button = ctk.CTkButton(button_frame, text="Delete", command=lambda n=name: self.delete_preset(n))
             delete_button.pack(side="left", padx=2)
+            
     def load_preset(self, preset_name, preset_type):
         """Load the selected preset and apply it to the corresponding synth UI."""
         print(f"Loading preset: {preset_name} ({preset_type})")

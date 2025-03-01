@@ -78,14 +78,6 @@ class PresetExporterImporter:
             print(f"Error importing preset: {e}")
             return None
         
-import numpy as np
-import math
-
-import numpy as np
-import math
-
-import numpy as np
-import math
 
 class FFT:
     @staticmethod
@@ -103,6 +95,11 @@ class FFT:
         N = len(x)
         if N <= 1:
             return x
+
+        # Ensure N is a power of two by padding with zeros
+        if N & (N - 1) != 0:
+            next_power_of_two = 2 ** (int(np.log2(N)) + 1)
+            x = np.pad(x, (0, next_power_of_two - N), mode='constant')
 
         # Split into even and odd indices
         even = FFT.fft(x[::2])
@@ -129,6 +126,11 @@ class FFT:
         if N <= 1:
             return X
 
+        # Ensure N is a power of two by padding with zeros
+        if N & (N - 1) != 0:
+            next_power_of_two = 2 ** (int(np.log2(N)) + 1)
+            X = np.pad(X, (0, next_power_of_two - N), mode='constant')
+
         # Split into even and odd indices
         even = FFT.ifft(X[::2])
         odd = FFT.ifft(X[1::2])
@@ -154,6 +156,11 @@ class FFT:
         if N <= 1:
             return np.array([complex(val) for val in x])
 
+        # Ensure N is a power of two by padding with zeros
+        if N & (N - 1) != 0:
+            next_power_of_two = 2 ** (int(np.log2(N)) + 1)
+            x = np.pad(x, (0, next_power_of_two - N), mode='constant')
+
         # Convert real input to complex
         x_complex = np.array([complex(val) for val in x])
 
@@ -162,7 +169,8 @@ class FFT:
 
         # Return only the non-redundant part (first half + 1)
         return fft_result[:N // 2 + 1]
-    
+
+    @staticmethod
     def rfftfreq(n, d=1.0):
         """
         Return the Discrete Fourier Transform sample frequencies
@@ -200,6 +208,11 @@ class FFT:
         N = len(X)
         if N <= 1:
             return np.array([complex(val) for val in X])
+
+        # Ensure N is a power of two by padding with zeros
+        if N & (N - 1) != 0:
+            next_power_of_two = 2 ** (int(np.log2(N)) + 1)
+            X = np.pad(X, (0, next_power_of_two - N), mode='constant')
 
         # Compute IFFT
         ifft_result = FFT.ifft(X)
