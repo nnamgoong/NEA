@@ -14,8 +14,8 @@ class PresetManager:
         self.user_id = user_id
         self.parent = parent  # Presets tab (UI parent)
         self.app = app  # Reference to the main SynthApp
+        self.selected_preset_var = ctk.StringVar(value="")  # Track the selected preset
         self.create_preset_ui()
-
         
                 
     def save_preset(self, preset_name, preset_type, preset_data):
@@ -209,22 +209,23 @@ class PresetManager:
         self.refresh_preset_list()
 
                 
+
     def create_preset_ui(self):
         """Create the UI for managing presets inside the Presets tab."""
+        # Sort menu and scrollable frame (existing code)
         self.sort_var = ctk.StringVar(value="name")
         ctk.CTkLabel(self.parent, text="Sort by:").pack(pady=5)
         self.sort_menu = ctk.CTkComboBox(self.parent, values=["name", "created_at", "last_updated"], variable=self.sort_var, command=self.refresh_preset_list)
         self.sort_menu.pack(pady=5)
 
-        # Create a scrollable frame for the preset list
-        self.scrollable_preset_frame = ScrollableFrame(self.parent, width=450, height=300)  # Adjust width and height as needed
+        self.scrollable_preset_frame = ScrollableFrame(self.parent, width=450, height=300)
         self.scrollable_preset_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Add the preset listbox inside the scrollable frame
         self.preset_listbox = ctk.CTkFrame(self.scrollable_preset_frame)
         self.preset_listbox.pack(fill="both", expand=True)
 
-        # Add Import/Export/Save as WAV buttons
+        # Add Import/Export/Save as WAV buttons (existing code)
         button_frame = ctk.CTkFrame(self.parent)
         button_frame.pack(fill="x", padx=10, pady=10)
 
@@ -237,7 +238,34 @@ class PresetManager:
         save_wav_button = ctk.CTkButton(button_frame, text="Save as .WAV", command=self.save_as_wav)
         save_wav_button.pack(side="left", padx=5)
 
+        # Add Upload to Community Library button
+        upload_button = ctk.CTkButton(button_frame, text="Upload to Community Library", command=self.upload_to_community_library)
+        upload_button.pack(side="left", padx=5)
+
         self.refresh_preset_list()
+
+    def upload_to_community_library(self):
+        """Upload the selected preset to the community library."""
+        selected_preset_name = self.selected_preset_var.get()
+        if not selected_preset_name:
+            messagebox.showerror("Error", "No preset selected.")
+            return
+
+        # Get the preset type (Additive or Subtractive)
+        preset_type = self.get_preset_type(selected_preset_name)
+        if not preset_type:
+            messagebox.showerror("Error", "Preset not found.")
+            return
+
+        # Fetch the preset data
+        preset_data = self.load_preset_data(selected_preset_name, preset_type)
+        if not preset_data:
+            messagebox.showerror("Error", "Failed to load preset data.")
+            return
+
+        # Upload the preset to the community library
+        self.app.community_preset_manager.save_preset_to_community(preset_data["name"], preset_type, preset_data)
+        messagebox.showinfo("Success", f"Preset '{preset_data['name']}' uploaded to the community library!")
 
     def refresh_preset_list(self, *args):
         """Refresh the preset list inside the UI with headers and radio buttons for single selection."""
@@ -501,6 +529,22 @@ class PresetManager:
         finally:
             connection.close()
 
+    def upload_preset_to_community(self):
+        """Upload the current preset to the community library."""
+        current_tab = self.app.tab_view.get()
+        if current_tab == "Additive Synth":
+            preset_data = self.app.additive_synth.get_preset_data("Community Preset")
+            preset_type = "Additive"
+        elif current_tab == "Subtractive Synth":
+            preset_data = self.app.subtractive_synth.get_preset_data("Community Preset")
+            preset_type = "Subtractive"
+        else:
+            messagebox.showerror("Error", "No active synth tab.")
+            return
+
+        # Use the CommunityPresetManager to upload the preset
+        self.app.community_preset_manager.save_preset_to_community(preset_data["name"], preset_type, preset_data)
+
             
     def save_as_wav(self):
         """Save the selected preset's waveform as a .WAV file."""
@@ -536,3 +580,174 @@ class PresetManager:
             # Save the waveform as a .WAV file
             wavfile.write(file_path, self.app.sample_rate, waveform)
             print(f"Waveform saved as {file_path}")
+
+import sqlite3
+import json
+import customtkinter as ctk
+from tkinter import messagebox
+from utils import ScrollableFrame
+
+class CommunityPresetManager:
+    def __init__(self, parent, user_id, app, db_path="synth.db"):
+        self.parent = parent
+        self.user_id = user_id
+        self.app = app
+        self.db_path = db_path
+
+        # Debugging: Check the CommunityPresets table
+        self.check_community_presets_table()
+
+        # Initialize the UI
+        self.create_ui()
+
+    def create_ui(self):
+        """Create the UI for the community presets tab."""
+        self.community_presets_frame = ctk.CTkFrame(self.parent)
+        self.community_presets_frame.pack(fill="both", expand=True)
+
+        # Add a scrollable frame for the community presets list
+        self.scrollable_community_frame = ScrollableFrame(self.community_presets_frame, width=450, height=300)
+        self.scrollable_community_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Refresh the list of community presets
+        self.refresh_community_presets_list()
+
+    def refresh_community_presets_list(self):
+        """Refresh the list of community presets in the UI."""
+        for widget in self.scrollable_community_frame.winfo_children():
+            widget.destroy()
+
+        presets = self.list_community_presets()
+        if not presets:
+            # Display a message if no presets are found
+            ctk.CTkLabel(self.scrollable_community_frame, text="No presets found in the community library.").pack(pady=10)
+            return
+
+        for preset in presets:
+            preset_id, name, preset_type, created_at, user_id = preset
+            preset_frame = ctk.CTkFrame(self.scrollable_community_frame)
+            preset_frame.pack(fill="x", padx=5, pady=2)
+
+            ctk.CTkLabel(preset_frame, text=name).pack(side="left", padx=5)
+            ctk.CTkLabel(preset_frame, text=preset_type).pack(side="left", padx=5)
+            ctk.CTkLabel(preset_frame, text=created_at).pack(side="left", padx=5)
+
+            load_button = ctk.CTkButton(preset_frame, text="Load", command=lambda pid=preset_id: self.load_preset_from_community(pid))
+            load_button.pack(side="right", padx=5)
+    def load_selected_preset(self):
+        """Load the selected community preset into the appropriate synth."""
+        selected_preset_id = self.get_selected_preset_id()
+        if not selected_preset_id:
+            messagebox.showerror("Error", "No preset selected.")
+            return
+
+        self.load_preset_from_community(selected_preset_id)
+
+    def get_selected_preset_id(self):
+        """Get the ID of the selected community preset."""
+        # This method should return the ID of the selected preset in the UI.
+        # You can implement this based on how the selection is tracked in your UI.
+        # For now, we assume the first preset is selected.
+        presets = self.list_community_presets()
+        if presets:
+            return presets[0][0]  # Return the ID of the first preset
+        return None
+
+    def load_preset_from_community(self, preset_id):
+        """Load a preset from the community library into the appropriate synth."""
+        preset_data = self.load_preset_data(preset_id)
+        if preset_data:
+            self.app.navigate_to_synth(preset_data["type"], preset_data)
+
+    def load_preset_data(self, preset_id):
+        """Load a preset from the community library."""
+        connection = sqlite3.connect(self.db_path)
+        cursor = connection.cursor()
+
+        try:
+            # Fetch the preset data from the community library
+            cursor.execute("SELECT preset_type, preset_data FROM CommunityPresets WHERE Cid = ?", (preset_id,))
+            result = cursor.fetchone()
+            if not result:
+                messagebox.showerror("Error", "Preset not found in the community library.")
+                return None
+
+            preset_type, preset_data_json = result
+            preset_data = json.loads(preset_data_json)
+
+            messagebox.showinfo("Success", f"Preset '{preset_data['name']}' loaded successfully!")
+            return preset_data
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"ERROR: Database error: {e}")
+            return None
+        finally:
+            connection.close()
+    def check_community_presets_table(self):
+        """Debugging function to check if the CommunityPresets table exists and contains data."""
+        connection = sqlite3.connect(self.db_path)
+        cursor = connection.cursor()
+
+        try:
+            # Check if the table exists
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='CommunityPresets'")
+            table_exists = cursor.fetchone()
+            if not table_exists:
+                print("Error: CommunityPresets table does not exist.")
+                return
+
+            # Check if the table contains data
+            cursor.execute("SELECT * FROM CommunityPresets")
+            presets = cursor.fetchall()
+            if not presets:
+                print("Warning: CommunityPresets table is empty.")
+            else:
+                print("Community Presets:")
+                for preset in presets:
+                    print(preset)
+        except sqlite3.Error as e:
+            print(f"ERROR: Database error: {e}")
+        finally:
+            connection.close()
+
+    def save_preset_to_community(self, preset_name, preset_type, preset_data):
+        """Save a preset to the community library."""
+        connection = sqlite3.connect(self.db_path)
+        cursor = connection.cursor()
+
+        try:
+            # Check if the preset already exists in the community library
+            cursor.execute("SELECT name FROM CommunityPresets WHERE name = ? AND preset_type = ?", (preset_name, preset_type))
+            if cursor.fetchone():
+                messagebox.showerror("Error", "A preset with this name already exists in the community library.")
+                return
+
+            # Insert the preset into the community library
+            cursor.execute("""
+                INSERT INTO CommunityPresets (user_id, name, preset_type, preset_data)
+                VALUES (?, ?, ?, ?)
+            """, (self.user_id, preset_name, preset_type, json.dumps(preset_data)))
+
+            connection.commit()
+            messagebox.showinfo("Success", f"Preset '{preset_name}' uploaded to the community library successfully!")
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"ERROR: Database error: {e}")
+        finally:
+            connection.close()
+
+    def list_community_presets(self):
+        """Retrieve a list of all presets in the community library."""
+        connection = sqlite3.connect(self.db_path)
+        cursor = connection.cursor()
+
+        try:
+            cursor.execute("""
+                SELECT Cid, name, preset_type, created_at, user_id
+                FROM CommunityPresets
+                ORDER BY created_at DESC
+            """)
+            return cursor.fetchall()
+        except sqlite3.Error as e:
+            print(f"ERROR: Database error: {e}")
+            return []
+        finally:
+            connection.close()

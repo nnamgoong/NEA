@@ -8,7 +8,7 @@ from tkinter import messagebox
 from additive_synth import AdditiveSynth
 from subtractive_synth import SubtractiveSynth
 from login_system import LoginSystem
-from preset_manager import PresetManager
+from preset_manager import PresetManager, CommunityPresetManager
 
 
 class SynthApp(ctk.CTk):
@@ -45,7 +45,6 @@ class SynthApp(ctk.CTk):
     def create_login_system(self):
         self.login_frame = ctk.CTkFrame(self)
         self.login_frame.pack(fill="both", expand=True)
-
         self.login_system = LoginSystem(self.login_frame, self.on_login_success)
 
     def on_login_success(self, user_id):
@@ -61,11 +60,17 @@ class SynthApp(ctk.CTk):
         self.additive_tab = self.tab_view.add("Additive Synth")
         self.subtractive_tab = self.tab_view.add("Subtractive Synth")
         self.presets_tab = self.tab_view.add("Presets")
+        self.community_tab = self.tab_view.add("Community Presets")
 
+        # Initialize the preset manager and community preset manager
         self.create_preset_manager()
+        self.create_community_preset_manager()
+
+        # Create the UI for each tab
         self.create_additive_synth_ui()
         self.create_subtractive_synth_ui()
 
+        
     def check_tab_selection(self):
         """Check which tab is selected and refresh the preset list if necessary."""
         current_tab = self.tab_view.get()
@@ -81,10 +86,7 @@ class SynthApp(ctk.CTk):
             self.preset_manager.refresh_preset_list()  # Refresh preset list dynamically
 
     def create_additive_synth_ui(self):
-        """
-        Create and initialize the Additive Synth UI.
-        Clear the tab to prevent duplicates.
-        """
+        """Create and initialize the Additive Synth UI."""
         # Clear existing widgets in the additive tab
         for widget in self.additive_tab.winfo_children():
             widget.destroy()
@@ -94,29 +96,37 @@ class SynthApp(ctk.CTk):
             self.additive_tab,
             self.sample_rate,
             self.duration,
-            self.preset_manager,
-            self.login_system.current_user_id
+            self.preset_manager,  # Use the preset_manager attribute
+            self.user_id
         )
 
     def create_subtractive_synth_ui(self):
         """Create and initialize the Subtractive Synth UI."""
+        # Clear existing widgets in the subtractive tab
         for widget in self.subtractive_tab.winfo_children():
             widget.destroy()
 
+        # Create and assign the SubtractiveSynth instance
         self.subtractive_synth = SubtractiveSynth(
             self.subtractive_tab,
             sample_rate=self.sample_rate,
             duration=self.duration,
             update_presets_callback=self.update_presets,
             user_id=self.user_id,
-            preset_manager=self.preset_manager  # Pass preset_manager
+            preset_manager=self.preset_manager  # Use the preset_manager attribute
         )
 
     def create_preset_manager(self):
-        """Create and initialize the preset manager inside the Presets tab."""
-        if not hasattr(self, "preset_manager"):
-            self.preset_manager = PresetManager(self.user_id, self.presets_tab, self, "synth.db")
+        """Initialize the preset manager."""
+        self.preset_manager = PresetManager(self.user_id, self.presets_tab, self)
 
+    def create_community_preset_manager(self):
+        """Initialize the community preset manager."""
+        self.community_preset_manager = CommunityPresetManager(
+            self.community_tab,  # parent (the Community Presets tab)
+            self.user_id,        # user_id
+            self                 # app (reference to the main SynthApp)
+        )
     def navigate_to_synth(self, synth_type, preset_data):
         """Navigate to the appropriate synth UI and load the preset data."""
         if synth_type == "Additive":

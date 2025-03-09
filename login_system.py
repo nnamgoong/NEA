@@ -1,9 +1,6 @@
 import customtkinter as ctk
 import sqlite3
 
-
-from hash_encryption import HashEncryption
-
 class LoginSystem:
     def __init__(self, parent, success_callback):
         self.parent = parent
@@ -11,8 +8,6 @@ class LoginSystem:
         self.current_user_id = None
         self.message_label = None  # Store reference to the message label
         self.create_login_ui()
-
-        self.hash_encryptor = HashEncryption()
 
     def create_login_ui(self):
         self.clear_ui()
@@ -45,7 +40,6 @@ class LoginSystem:
         self.back_button = ctk.CTkButton(self.parent, text="Back", command=self.create_login_ui)
         self.back_button.pack(pady=10)
 
-
     def authenticate(self):
         username = self.username_entry.get()
         password = self.password_entry.get()
@@ -57,13 +51,13 @@ class LoginSystem:
         with sqlite3.connect("synth.db") as connection:
             cursor = connection.cursor()
 
-            query = "SELECT Uid, password, salt FROM Users WHERE username = ?"
+            query = "SELECT Uid, password FROM Users WHERE username = ?"
             cursor.execute(query, (username,))
             result = cursor.fetchone()
 
         if result:
-            user_id, stored_hash, salt = result
-            if self.hash_encryptor.verify_password(password, salt, stored_hash):
+            user_id, stored_password = result
+            if password == stored_password:  # Directly compare passwords
                 self.current_user_id = user_id
                 self.success_callback(self.current_user_id)
             else:
@@ -86,7 +80,6 @@ class LoginSystem:
         self.message_label = ctk.CTkLabel(self.parent, text=message, text_color="red")
         self.message_label.pack(pady=10)
 
-
     def register_user(self):
         """Register a new user."""
         username = self.username_entry.get()
@@ -96,18 +89,12 @@ class LoginSystem:
             self.show_error("Username and password cannot be empty.")
             return
 
-        # Hash the password for secure storage
-        from hash_encryption import HashEncryption  # Assuming you are using custom hashing
-        hash_encryptor = HashEncryption()
-
-        salt, hashed_password = hash_encryptor.hash_password(password)
-
         try:
             # Insert the new user into the database
             with sqlite3.connect("synth.db") as connection:
                 cursor = connection.cursor()
-                query = "INSERT INTO Users (username, password, salt) VALUES (?, ?, ?)"
-                cursor.execute(query, (username, hashed_password, salt))
+                query = "INSERT INTO Users (username, password) VALUES (?, ?)"
+                cursor.execute(query, (username, password))
                 connection.commit()
 
             self.show_message("Registration successful! Please log in.")
@@ -115,22 +102,9 @@ class LoginSystem:
         except sqlite3.IntegrityError:
             self.show_error("Username already exists. Please choose another.")
 
-
-    def show_error(self, message):
-        self._update_message(message, "red")
-
     def show_message(self, message):
-        self._update_message(message, "green")
-
-    def _update_message(self, message, color):
-        """Display a single message at a time."""
+        """Display a success message on the UI."""
         if self.message_label:
             self.message_label.destroy()
-        self.message_label = ctk.CTkLabel(self.parent, text=message, text_color=color)
+        self.message_label = ctk.CTkLabel(self.parent, text=message, text_color="green")
         self.message_label.pack(pady=10)
-
-    def clear_ui(self):
-        """Clear all widgets from the parent frame."""
-        for widget in self.parent.winfo_children():
-            widget.destroy()
-        self.message_label = None

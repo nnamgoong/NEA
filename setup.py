@@ -12,8 +12,7 @@ def create_dbs():
     CREATE TABLE IF NOT EXISTS Users (
         Uid INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        salt BLOB
+        password TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS AdditivePresets (
@@ -42,6 +41,17 @@ def create_dbs():
         volume REAL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES Users(Uid)
+    );
+
+    -- New table to store community presets
+    CREATE TABLE IF NOT EXISTS CommunityPresets (
+        Cid INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,  -- The user who uploaded the preset
+        name TEXT NOT NULL,
+        preset_type TEXT NOT NULL,  -- 'Additive' or 'Subtractive'
+        preset_data TEXT NOT NULL,  -- JSON-encoded preset data
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES Users(Uid)
     );
 
@@ -91,14 +101,7 @@ def create_dbs():
     """
     cursor.executescript(create_tables)
 
-    #  Ensure 'salt' column exists in Users table
-    try:
-        cursor.execute("ALTER TABLE Users ADD COLUMN salt BLOB")
-        print("Added 'salt' column to Users table.")
-    except sqlite3.OperationalError:
-        print("'salt' column already exists. Skipping...")
-
-    #  Prepopulate the Effects table with predefined effects
+    # Prepopulate the Effects table with predefined effects
     predefined_effects = [
         ("Chorus", "Adds depth and richness to the sound"),
         ("Flanger", "Creates a sweeping, jet-like sound"),
@@ -111,7 +114,7 @@ def create_dbs():
 
     connection.commit()
     connection.close()
-    print("Database setup and migration completed successfully.")
+    print("Database setup completed successfully.")
 
 if __name__ == "__main__":
     create_dbs()
