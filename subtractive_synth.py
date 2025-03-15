@@ -12,7 +12,6 @@ from utils import ScrollableFrame
 
 
 
-
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 

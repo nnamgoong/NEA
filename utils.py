@@ -79,19 +79,20 @@ class PresetExporterImporter:
             return None
         
 
+import numpy as np
+
 class FFT:
     @staticmethod
+    def bit_reverse(x: np.ndarray) -> np.ndarray:
+        """Perform bit reversal permutation on the input array."""
+        n = len(x)
+        num_bits = n.bit_length() - 1
+        reversed_indices = [int(format(i, f'0{num_bits}b')[::-1], 2) for i in range(n)]
+        return x[reversed_indices]
+
+    @staticmethod
     def fft(x: np.ndarray) -> np.ndarray:
-        """
-        Compute the Fast Fourier Transform (FFT) of a 1D array using the Cooley-Tukey algorithm.
-        This implementation assumes the input length is a power of two.
-
-        Args:
-            x (np.ndarray): Input array of complex numbers.
-
-        Returns:
-            np.ndarray: The FFT of the input array.
-        """
+        """Compute the FFT of a 1D array using an iterative Cooley-Tukey algorithm."""
         N = len(x)
         if N <= 1:
             return x
@@ -101,27 +102,27 @@ class FFT:
             next_power_of_two = 2 ** (int(np.log2(N)) + 1)
             x = np.pad(x, (0, next_power_of_two - N), mode='constant')
 
-        # Split into even and odd indices
-        even = FFT.fft(x[::2])
-        odd = FFT.fft(x[1::2])
+        # Bit reversal permutation
+        x = FFT.bit_reverse(x)
 
-        # Combine results
-        T = [np.exp(-2j * np.pi * k / N) * odd[k] for k in range(N // 2)]
-        return np.array([even[k] + T[k] for k in range(N // 2)] +
-                        [even[k] - T[k] for k in range(N // 2)])
+        # Iterative FFT
+        size = 2
+        while size <= N:
+            half_size = size // 2
+            step = N // size
+            for i in range(0, N, size):
+                for j in range(half_size):
+                    twiddle = np.exp(-2j * np.pi * j / size)
+                    even = x[i + j]
+                    odd = x[i + j + half_size] * twiddle
+                    x[i + j] = even + odd
+                    x[i + j + half_size] = even - odd
+            size *= 2
+
+        return x
 
     @staticmethod
     def ifft(X: np.ndarray) -> np.ndarray:
-        """
-        Compute the Inverse Fast Fourier Transform (IFFT) of a 1D array.
-        This implementation assumes the input length is a power of two.
-
-        Args:
-            X (np.ndarray): Input array of complex numbers.
-
-        Returns:
-            np.ndarray: The IFFT of the input array.
-        """
         N = len(X)
         if N <= 1:
             return X
@@ -142,16 +143,6 @@ class FFT:
 
     @staticmethod
     def rfft(x: np.ndarray) -> np.ndarray:
-        """
-        Compute the real-valued FFT of a 1D array.
-        This implementation matches np.fft.rfft behavior.
-
-        Args:
-            x (np.ndarray): Input array of real numbers.
-
-        Returns:
-            np.ndarray: The real-valued FFT of the input array.
-        """
         N = len(x)
         if N <= 1:
             return np.array([complex(val) for val in x])
@@ -172,17 +163,6 @@ class FFT:
 
     @staticmethod
     def rfftfreq(n, d=1.0):
-        """
-        Return the Discrete Fourier Transform sample frequencies
-        (for usage with rfft, irfft).
-
-        Args:
-            n (int): Window length.
-            d (float): Sample spacing (inverse of the sampling rate). Default is 1.0.
-
-        Returns:
-            np.ndarray: Array of length n//2 + 1 containing the sample frequencies.
-        """
         if not isinstance(n, int) or n <= 0:
             raise ValueError("n must be a positive integer")
         if not isinstance(d, (int, float)) or d <= 0:
@@ -195,16 +175,6 @@ class FFT:
 
     @staticmethod
     def irfft(X: np.ndarray) -> np.ndarray:
-        """
-        Compute the inverse real-valued FFT of a 1D array.
-        This implementation matches np.fft.irfft behavior.
-
-        Args:
-            X (np.ndarray): Input array of complex numbers.
-
-        Returns:
-            np.ndarray: The inverse real-valued FFT of the input array.
-        """
         N = len(X)
         if N <= 1:
             return np.array([complex(val) for val in X])
