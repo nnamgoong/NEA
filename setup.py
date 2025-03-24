@@ -17,7 +17,7 @@ def create_dbs():
 
     CREATE TABLE IF NOT EXISTS AdditivePresets (
         Aid INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
+        Uid INTEGER NOT NULL,
         name TEXT UNIQUE NOT NULL,
         base_frequency REAL,
         sample_rate REAL,
@@ -31,38 +31,36 @@ def create_dbs():
         release REAL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES Users(Uid)
+        FOREIGN KEY (Uid) REFERENCES Users(Uid)
     );
 
     CREATE TABLE IF NOT EXISTS SubtractivePresets (
         Sid INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
+        Uid INTEGER NOT NULL,
         name TEXT UNIQUE NOT NULL,
         volume REAL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES Users(Uid)
+        FOREIGN KEY (Uid) REFERENCES Users(Uid)
     );
 
-    -- New table to store community presets
     CREATE TABLE IF NOT EXISTS CommunityPresets (
         Cid INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,  -- The user who uploaded the preset
+        Uid INTEGER NOT NULL,  
         name TEXT NOT NULL,
-        preset_type TEXT NOT NULL,  -- 'Additive' or 'Subtractive'
-        preset_data TEXT NOT NULL,  -- JSON-encoded preset data
+        preset_type TEXT NOT NULL,  
+        preset_data TEXT NOT NULL,  
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES Users(Uid)
+        FOREIGN KEY (Uid) REFERENCES Users(Uid)
     );
 
-    --  New table to store multiple filters per preset
     CREATE TABLE IF NOT EXISTS SubtractivePresetFilters (
         Fid INTEGER PRIMARY KEY AUTOINCREMENT,
-        preset_id INTEGER NOT NULL,
+        Sid INTEGER NOT NULL,
         filter_type TEXT NOT NULL,
         cutoff_frequency REAL NOT NULL,
         resonance REAL NOT NULL,
-        FOREIGN KEY (preset_id) REFERENCES SubtractivePresets(Sid) ON DELETE CASCADE
+        FOREIGN KEY (Sid) REFERENCES SubtractivePresets(Sid) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS Effects (
@@ -73,29 +71,29 @@ def create_dbs():
 
     CREATE TABLE IF NOT EXISTS SubtractivePresetEffects (
         SpeId INTEGER PRIMARY KEY AUTOINCREMENT,
-        preset_id INTEGER NOT NULL,
-        effect_id INTEGER NOT NULL,
+        Sid INTEGER NOT NULL,
+        Eid INTEGER NOT NULL,
         parameters TEXT NOT NULL,
-        FOREIGN KEY (preset_id) REFERENCES SubtractivePresets(Sid) ON DELETE CASCADE,
-        FOREIGN KEY (effect_id) REFERENCES Effects(Eid) ON DELETE CASCADE
+        FOREIGN KEY (Sid) REFERENCES SubtractivePresets(Sid) ON DELETE CASCADE,
+        FOREIGN KEY (Eid) REFERENCES Effects(Eid) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS SubtractivePresetOscillators (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        preset_id INTEGER NOT NULL,
+        Sid INTEGER NOT NULL,
         type TEXT NOT NULL,
         frequency REAL NOT NULL,
         amplitude REAL NOT NULL,
-        FOREIGN KEY (preset_id) REFERENCES SubtractivePresets(Sid) ON DELETE CASCADE
+        FOREIGN KEY (Sid) REFERENCES SubtractivePresets(Sid) ON DELETE CASCADE
     );
     CREATE TABLE IF NOT EXISTS SubtractivePresetLFOs (
-    LfoId INTEGER PRIMARY KEY AUTOINCREMENT,
-    preset_id INTEGER NOT NULL,
+    Lid INTEGER PRIMARY KEY AUTOINCREMENT,
+    Sid INTEGER NOT NULL,
     shape TEXT NOT NULL,
     frequency REAL NOT NULL,
     depth REAL NOT NULL,
     target TEXT NOT NULL,
-    FOREIGN KEY (preset_id) REFERENCES SubtractivePresets(Sid) ON DELETE CASCADE
+    FOREIGN KEY (Sid) REFERENCES SubtractivePresets(Sid) ON DELETE CASCADE
     );
 
     """

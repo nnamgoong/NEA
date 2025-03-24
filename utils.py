@@ -189,3 +189,6 @@ class FFT:
 
         # Return only the real part
         return np.real(ifft_result)
+
+#test = np.array([0,1,2,3,4,5,6,7])
+#print(FFT.bit_reverse(test))

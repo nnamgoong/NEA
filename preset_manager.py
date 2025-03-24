@@ -9,9 +9,9 @@ from utils import ScrollableFrame
 
 
 class PresetManager:
-    def __init__(self, user_id, parent, app, db_path="synth.db"):
+    def __init__(self, Uid, parent, app, db_path="synth.db"):
         self.db_path = db_path
-        self.user_id = user_id
+        self.Uid = Uid
         self.parent = parent  # Presets tab (UI parent)
         self.app = app  # Reference to the main SynthApp
         self.selected_preset_var = ctk.StringVar(value="")  # Track the selected preset
@@ -28,9 +28,9 @@ class PresetManager:
 
             # Check if the preset already exists
             if preset_type == "Additive":
-                cursor.execute("SELECT name FROM AdditivePresets WHERE user_id = ? AND name = ?", (self.user_id, preset_name))
+                cursor.execute("SELECT name FROM AdditivePresets WHERE Uid = ? AND name = ?", (self.Uid, preset_name))
             elif preset_type == "Subtractive":
-                cursor.execute("SELECT name FROM SubtractivePresets WHERE user_id = ? AND name = ?", (self.user_id, preset_name))
+                cursor.execute("SELECT name FROM SubtractivePresets WHERE Uid = ? AND name = ?", (self.Uid, preset_name))
 
             preset_exists = cursor.fetchone() is not None
 
@@ -40,20 +40,20 @@ class PresetManager:
                     cursor.execute("""
                         UPDATE AdditivePresets
                         SET base_frequency = ?, sample_rate = ?, duration = ?, volume = ?, tone = ?, num_harmonics = ?, attack = ?, decay = ?, sustain = ?, release = ?, last_updated = ?
-                        WHERE user_id = ? AND name = ?
+                        WHERE Uid = ? AND name = ?
                     """, (
                         preset_data["base_frequency"], preset_data["sample_rate"], preset_data["duration"],
                         preset_data["volume"], preset_data["tone"], preset_data["num_harmonics"], preset_data["adsr"]["attack"],
                         preset_data["adsr"]["decay"], preset_data["adsr"]["sustain"], preset_data["adsr"]["release"], current_time,
-                        self.user_id, preset_name
+                        self.Uid, preset_name
                     ))
                 else:
                     # Insert new preset
                     cursor.execute("""
-                        INSERT INTO AdditivePresets (user_id, name, base_frequency, sample_rate, duration, volume, tone, num_harmonics, attack, decay, sustain, release, created_at, last_updated)
+                        INSERT INTO AdditivePresets (Uid, name, base_frequency, sample_rate, duration, volume, tone, num_harmonics, attack, decay, sustain, release, created_at, last_updated)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
-                        self.user_id, preset_name, preset_data["base_frequency"], preset_data["sample_rate"], preset_data["duration"],
+                        self.Uid, preset_name, preset_data["base_frequency"], preset_data["sample_rate"], preset_data["duration"],
                         preset_data["volume"], preset_data["tone"], preset_data["num_harmonics"], preset_data["adsr"]["attack"],
                         preset_data["adsr"]["decay"], preset_data["adsr"]["sustain"], preset_data["adsr"]["release"], current_time, current_time
                     ))
@@ -64,33 +64,33 @@ class PresetManager:
                     cursor.execute("""
                         UPDATE SubtractivePresets
                         SET volume = ?, last_updated = ?
-                        WHERE user_id = ? AND name = ?
-                    """, (preset_data["volume"], current_time, self.user_id, preset_name))
+                        WHERE Uid = ? AND name = ?
+                    """, (preset_data["volume"], current_time, self.Uid, preset_name))
 
                     # Get the preset ID
-                    cursor.execute("SELECT Sid FROM SubtractivePresets WHERE user_id = ? AND name = ?", (self.user_id, preset_name))
-                    preset_id = cursor.fetchone()[0]
+                    cursor.execute("SELECT Sid FROM SubtractivePresets WHERE Uid = ? AND name = ?", (self.Uid, preset_name))
+                    Sid = cursor.fetchone()[0]
 
                     # Delete existing components (oscillators, filters, effects, LFOs)
-                    cursor.execute("DELETE FROM SubtractivePresetOscillators WHERE preset_id = ?", (preset_id,))
-                    cursor.execute("DELETE FROM SubtractivePresetFilters WHERE preset_id = ?", (preset_id,))
-                    cursor.execute("DELETE FROM SubtractivePresetEffects WHERE preset_id = ?", (preset_id,))
-                    cursor.execute("DELETE FROM SubtractivePresetLFOs WHERE preset_id = ?", (preset_id,))
+                    cursor.execute("DELETE FROM SubtractivePresetOscillators WHERE Sid = ?", (Sid,))
+                    cursor.execute("DELETE FROM SubtractivePresetFilters WHERE Sid = ?", (Sid,))
+                    cursor.execute("DELETE FROM SubtractivePresetEffects WHERE Sid = ?", (Sid,))
+                    cursor.execute("DELETE FROM SubtractivePresetLFOs WHERE Sid = ?", (Sid,))
 
                     # Save updated components
-                    self.save_subtractive_components(cursor, preset_id, preset_data)
+                    self.save_subtractive_components(cursor, Sid, preset_data)
                 else:
                     # Insert new preset
                     cursor.execute("""
-                        INSERT INTO SubtractivePresets (user_id, name, volume, created_at, last_updated)
+                        INSERT INTO SubtractivePresets (Uid, name, volume, created_at, last_updated)
                         VALUES (?, ?, ?, ?, ?)
-                    """, (self.user_id, preset_name, preset_data["volume"], current_time, current_time))
+                    """, (self.Uid, preset_name, preset_data["volume"], current_time, current_time))
 
                     # Get the ID of the newly created preset
-                    preset_id = cursor.lastrowid
+                    Sid = cursor.lastrowid
 
                     # Save oscillators, filters, effects, and LFOs
-                    self.save_subtractive_components(cursor, preset_id, preset_data)
+                    self.save_subtractive_components(cursor, Sid, preset_data)
 
             connection.commit()
             print(f"Preset '{preset_name}' {'updated' if preset_exists else 'saved'} successfully!")
@@ -104,21 +104,21 @@ class PresetManager:
 
 
 
-    def save_subtractive_components(self, cursor, preset_id, preset_data):
+    def save_subtractive_components(self, cursor, Sid, preset_data):
         """Save the oscillators, filters, effects, and LFOs for a subtractive synthesizer preset."""
         # Save oscillators
         for osc in preset_data.get("oscillators", []):
             cursor.execute("""
-                INSERT INTO SubtractivePresetOscillators (preset_id, type, frequency, amplitude)
+                INSERT INTO SubtractivePresetOscillators (Sid, type, frequency, amplitude)
                 VALUES (?, ?, ?, ?)
-            """, (preset_id, osc["type"], osc["frequency"], osc["amplitude"]))
+            """, (Sid, osc["type"], osc["frequency"], osc["amplitude"]))
 
         # Save filters
         for filt in preset_data.get("filters", []):
             cursor.execute("""
-                INSERT INTO SubtractivePresetFilters (preset_id, filter_type, cutoff_frequency, resonance)
+                INSERT INTO SubtractivePresetFilters (Sid, filter_type, cutoff_frequency, resonance)
                 VALUES (?, ?, ?, ?)
-            """, (preset_id, filt["type"], filt["cutoff"], filt["resonance"]))
+            """, (Sid, filt["type"], filt["cutoff"], filt["resonance"]))
 
         # Save effects
         for effect in preset_data.get("effects", []):
@@ -130,20 +130,20 @@ class PresetManager:
 
             # Get the effect ID
             cursor.execute("SELECT Eid FROM Effects WHERE name = ?", (effect["type"],))
-            effect_id = cursor.fetchone()[0]
+            Eid = cursor.fetchone()[0]
 
             # Save the effect parameters
             cursor.execute("""
-                INSERT INTO SubtractivePresetEffects (preset_id, effect_id, parameters)
+                INSERT INTO SubtractivePresetEffects (Sid, Eid, parameters)
                 VALUES (?, ?, ?)
-            """, (preset_id, effect_id, json.dumps(effect["params"])))
+            """, (Sid, Eid, json.dumps(effect["params"])))
 
         # Save LFOs
         for lfo in preset_data.get("lfos", []):
             cursor.execute("""
-                INSERT INTO SubtractivePresetLFOs (preset_id, shape, frequency, depth, target)
+                INSERT INTO SubtractivePresetLFOs (Sid, shape, frequency, depth, target)
                 VALUES (?, ?, ?, ?, ?)
-            """, (preset_id, lfo["shape"], lfo["frequency"], lfo["depth"], lfo["target"]))             
+            """, (Sid, lfo["shape"], lfo["frequency"], lfo["depth"], lfo["target"]))             
     def list_presets(self, sort_by="name"):
         """Retrieve a sorted list of all presets for the user."""
         connection = sqlite3.connect(self.db_path)
@@ -153,16 +153,16 @@ class PresetManager:
         cursor.execute("""
             SELECT name, 'Additive' as type, created_at, last_updated
             FROM AdditivePresets
-            WHERE user_id = ?
-        """, (self.user_id,))
+            WHERE Uid = ?
+        """, (self.Uid,))
         additive_presets = cursor.fetchall()
 
         # Retrieve subtractive presets
         cursor.execute("""
             SELECT name, 'Subtractive' as type, created_at, last_updated
             FROM SubtractivePresets
-            WHERE user_id = ?
-        """, (self.user_id,))
+            WHERE Uid = ?
+        """, (self.Uid,))
         subtractive_presets = cursor.fetchall()
 
         # Combine the results
@@ -193,10 +193,10 @@ class PresetManager:
 
         try:
             # Delete from AdditivePresets
-            cursor.execute("DELETE FROM AdditivePresets WHERE user_id = ? AND name = ?", (self.user_id, preset_name))
+            cursor.execute("DELETE FROM AdditivePresets WHERE Uid = ? AND name = ?", (self.Uid, preset_name))
             
             # Delete from SubtractivePresets
-            cursor.execute("DELETE FROM SubtractivePresets WHERE user_id = ? AND name = ?", (self.user_id, preset_name))
+            cursor.execute("DELETE FROM SubtractivePresets WHERE Uid = ? AND name = ?", (self.Uid, preset_name))
             
             connection.commit()  # Commit the changes
             print(f"Preset '{preset_name}' deleted successfully!")
@@ -265,7 +265,6 @@ class PresetManager:
 
         # Upload the preset to the community library
         self.app.community_preset_manager.save_preset_to_community(preset_data["name"], preset_type, preset_data)
-        messagebox.showinfo("Success", f"Preset '{preset_data['name']}' uploaded to the community library!")
 
     def refresh_preset_list(self, *args):
         """Refresh the preset list inside the UI with headers and radio buttons for single selection."""
@@ -347,8 +346,8 @@ class PresetManager:
             cursor.execute("""
                 SELECT base_frequency, sample_rate, duration, volume, tone, num_harmonics, attack, decay, sustain, release
                 FROM AdditivePresets
-                WHERE user_id = ? AND name = ?
-            """, (self.user_id, preset_name))
+                WHERE Uid = ? AND name = ?
+            """, (self.Uid, preset_name))
             result = cursor.fetchone()
 
             if not result:
@@ -378,43 +377,43 @@ class PresetManager:
         elif preset_type == "Subtractive":
             cursor.execute("""
                 SELECT Sid, volume FROM SubtractivePresets 
-                WHERE user_id = ? AND name = ?
-            """, (self.user_id, preset_name))
+                WHERE Uid = ? AND name = ?
+            """, (self.Uid, preset_name))
             preset = cursor.fetchone()
             
             if not preset:
                 print(f"Error: Subtractive Preset '{preset_name}' not found.")
                 return None
             
-            preset_id, volume = preset
+            Sid, volume = preset
 
             # Retrieve filters
             cursor.execute("""
                 SELECT filter_type, cutoff_frequency, resonance FROM SubtractivePresetFilters 
-                WHERE preset_id = ?
-            """, (preset_id,))
+                WHERE Sid = ?
+            """, (Sid,))
             filters = [{"type": row[0], "cutoff": row[1], "resonance": row[2]} for row in cursor.fetchall()]
 
             # Retrieve oscillators
             cursor.execute("""
                 SELECT type, frequency, amplitude FROM SubtractivePresetOscillators 
-                WHERE preset_id = ?
-            """, (preset_id,))
+                WHERE Sid = ?
+            """, (Sid,))
             oscillators = [{"type": row[0], "frequency": row[1], "amplitude": row[2]} for row in cursor.fetchall()]
 
             # Retrieve effects
             cursor.execute("""
                 SELECT e.name, spe.parameters FROM SubtractivePresetEffects spe
-                JOIN Effects e ON spe.effect_id = e.Eid
-                WHERE spe.preset_id = ?
-            """, (preset_id,))
+                JOIN Effects e ON spe.Eid = e.Eid
+                WHERE spe.Sid = ?
+            """, (Sid,))
             effects = [{"type": row[0], "params": json.loads(row[1])} for row in cursor.fetchall()]
 
             # Retrieve LFOs (fix: ensure correct SQL column names)
             cursor.execute("""
                 SELECT shape, frequency, depth, target FROM SubtractivePresetLFOs
-                WHERE preset_id = ?
-            """, (preset_id,))
+                WHERE Sid = ?
+            """, (Sid,))
             lfos = [{"shape": row[0], "frequency": row[1], "depth": row[2], "target": row[3]} for row in cursor.fetchall()]
 
             return {
@@ -438,11 +437,11 @@ class PresetManager:
         connection = sqlite3.connect(self.db_path)
         cursor = connection.cursor()
 
-        cursor.execute("SELECT 'Additive' FROM AdditivePresets WHERE user_id = ? AND name = ?", (self.user_id, selected_preset_name))
+        cursor.execute("SELECT 'Additive' FROM AdditivePresets WHERE Uid = ? AND name = ?", (self.Uid, selected_preset_name))
         if cursor.fetchone():
             preset_type = "Additive"
         else:
-            cursor.execute("SELECT 'Subtractive' FROM SubtractivePresets WHERE user_id = ? AND name = ?", (self.user_id, selected_preset_name))
+            cursor.execute("SELECT 'Subtractive' FROM SubtractivePresets WHERE Uid = ? AND name = ?", (self.Uid, selected_preset_name))
             if cursor.fetchone():
                 preset_type = "Subtractive"
             else:
@@ -495,12 +494,12 @@ class PresetManager:
         connection = sqlite3.connect(self.db_path)
         cursor = connection.cursor()
 
-        cursor.execute("SELECT 'Additive' FROM AdditivePresets WHERE name = ? AND user_id = ?", (preset_name, self.user_id))
+        cursor.execute("SELECT 'Additive' FROM AdditivePresets WHERE name = ? AND Uid = ?", (preset_name, self.Uid))
         if cursor.fetchone():
             connection.close()
             return "Additive"
 
-        cursor.execute("SELECT 'Subtractive' FROM SubtractivePresets WHERE name = ? AND user_id = ?", (preset_name, self.user_id))
+        cursor.execute("SELECT 'Subtractive' FROM SubtractivePresets WHERE name = ? AND Uid = ?", (preset_name, self.Uid))
         if cursor.fetchone():
             connection.close()
             return "Subtractive"
@@ -515,9 +514,9 @@ class PresetManager:
 
         try:
             if preset_type == "Additive":
-                cursor.execute("SELECT name FROM AdditivePresets WHERE user_id = ? AND name = ?", (self.user_id, preset_name))
+                cursor.execute("SELECT name FROM AdditivePresets WHERE Uid = ? AND name = ?", (self.Uid, preset_name))
             elif preset_type == "Subtractive":
-                cursor.execute("SELECT name FROM SubtractivePresets WHERE user_id = ? AND name = ?", (self.user_id, preset_name))
+                cursor.execute("SELECT name FROM SubtractivePresets WHERE Uid = ? AND name = ?", (self.Uid, preset_name))
             else:
                 return False  # Invalid preset type
 
@@ -588,9 +587,9 @@ from tkinter import messagebox
 from utils import ScrollableFrame
 
 class CommunityPresetManager:
-    def __init__(self, parent, user_id, app, db_path="synth.db"):
+    def __init__(self, parent, Uid, app, db_path="synth.db"):
         self.parent = parent
-        self.user_id = user_id
+        self.Uid = Uid
         self.app = app
         self.db_path = db_path
 
@@ -624,7 +623,7 @@ class CommunityPresetManager:
             return
 
         for preset in presets:
-            preset_id, name, preset_type, created_at, user_id = preset
+            Sid, name, preset_type, created_at, Uid = preset
             preset_frame = ctk.CTkFrame(self.scrollable_community_frame)
             preset_frame.pack(fill="x", padx=5, pady=2)
 
@@ -632,18 +631,18 @@ class CommunityPresetManager:
             ctk.CTkLabel(preset_frame, text=preset_type).pack(side="left", padx=5)
             ctk.CTkLabel(preset_frame, text=created_at).pack(side="left", padx=5)
 
-            load_button = ctk.CTkButton(preset_frame, text="Load", command=lambda pid=preset_id: self.load_preset_from_community(pid))
+            load_button = ctk.CTkButton(preset_frame, text="Load", command=lambda pid=Sid: self.load_preset_from_community(pid))
             load_button.pack(side="right", padx=5)
     def load_selected_preset(self):
         """Load the selected community preset into the appropriate synth."""
-        selected_preset_id = self.get_selected_preset_id()
-        if not selected_preset_id:
+        selected_Sid = self.get_selected_Sid()
+        if not selected_Sid:
             messagebox.showerror("Error", "No preset selected.")
             return
 
-        self.load_preset_from_community(selected_preset_id)
+        self.load_preset_from_community(selected_Sid)
 
-    def get_selected_preset_id(self):
+    def get_selected_Sid(self):
         """Get the ID of the selected community preset."""
         # This method should return the ID of the selected preset in the UI.
         # You can implement this based on how the selection is tracked in your UI.
@@ -653,20 +652,20 @@ class CommunityPresetManager:
             return presets[0][0]  # Return the ID of the first preset
         return None
 
-    def load_preset_from_community(self, preset_id):
+    def load_preset_from_community(self, Sid):
         """Load a preset from the community library into the appropriate synth."""
-        preset_data = self.load_preset_data(preset_id)
+        preset_data = self.load_preset_data(Sid)
         if preset_data:
             self.app.navigate_to_synth(preset_data["type"], preset_data)
 
-    def load_preset_data(self, preset_id):
+    def load_preset_data(self, Sid):
         """Load a preset from the community library."""
         connection = sqlite3.connect(self.db_path)
         cursor = connection.cursor()
 
         try:
             # Fetch the preset data from the community library
-            cursor.execute("SELECT preset_type, preset_data FROM CommunityPresets WHERE Cid = ?", (preset_id,))
+            cursor.execute("SELECT preset_type, preset_data FROM CommunityPresets WHERE Cid = ?", (Sid,))
             result = cursor.fetchone()
             if not result:
                 messagebox.showerror("Error", "Preset not found in the community library.")
@@ -723,9 +722,9 @@ class CommunityPresetManager:
 
             # Insert the preset into the community library
             cursor.execute("""
-                INSERT INTO CommunityPresets (user_id, name, preset_type, preset_data)
+                INSERT INTO CommunityPresets (Uid, name, preset_type, preset_data)
                 VALUES (?, ?, ?, ?)
-            """, (self.user_id, preset_name, preset_type, json.dumps(preset_data)))
+            """, (self.Uid, preset_name, preset_type, json.dumps(preset_data)))
 
             connection.commit()
             messagebox.showinfo("Success", f"Preset '{preset_name}' uploaded to the community library successfully!")
@@ -741,7 +740,7 @@ class CommunityPresetManager:
 
         try:
             cursor.execute("""
-                SELECT Cid, name, preset_type, created_at, user_id
+                SELECT Cid, name, preset_type, created_at, Uid
                 FROM CommunityPresets
                 ORDER BY created_at DESC
             """)

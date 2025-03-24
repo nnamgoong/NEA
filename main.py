@@ -72,7 +72,6 @@ class SynthApp(ctk.CTk):
 
         
     def check_tab_selection(self):
-        """Check which tab is selected and refresh the preset list if necessary."""
         current_tab = self.tab_view.get()
         if current_tab == "Presets":
             self.preset_manager.refresh_preset_list()
@@ -81,12 +80,10 @@ class SynthApp(ctk.CTk):
         self.after(500, self.check_tab_selection)
 
     def on_tab_change(self, event=None):
-        """Refresh presets when navigating to the presets tab."""
         if self.tab_view.get() == "Presets":
             self.preset_manager.refresh_preset_list()  # Refresh preset list dynamically
 
     def create_additive_synth_ui(self):
-        """Create and initialize the Additive Synth UI."""
         # Clear existing widgets in the additive tab
         for widget in self.additive_tab.winfo_children():
             widget.destroy()
@@ -101,7 +98,6 @@ class SynthApp(ctk.CTk):
         )
 
     def create_subtractive_synth_ui(self):
-        """Create and initialize the Subtractive Synth UI."""
         # Clear existing widgets in the subtractive tab
         for widget in self.subtractive_tab.winfo_children():
             widget.destroy()
