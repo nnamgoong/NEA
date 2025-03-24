@@ -15,14 +15,15 @@ class SynthApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Synthesizer Application")
-        self.geometry("1000x700")
-
+        self.geometry("1200x700")  # Standard 16:9 ratio window
+        
+        # Configure grid for consistent scaling
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+        
         self.sample_rate = 32768
         self.duration = 1.0
-
-        # Add a menu bar
         self.create_menu_bar()
-
         self.create_login_system()
 
     def create_menu_bar(self):

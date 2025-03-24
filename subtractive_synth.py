@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import butter, lfilter, sosfilt
 from threading import Timer
 from tkinter import simpledialog, messagebox
+import threading
 
 from tooltips import Tooltip
 from utils import ScrollableFrame
@@ -187,17 +188,13 @@ class SubtractiveSynth:
 
 
     def debounced_update(self, *args):
-        """Debounce updates for performance and update the harmonics value label."""
-        # Update the harmonics value label
-        self.harmonics_value_label.configure(text=str(int(float(self.harmonics_slider.get()))))
-
-        # Cancel any existing timer
-        if hasattr(self, "update_timer") and self.update_timer:
-            self.update_timer.cancel()
-
-        # Schedule the graphs to update after 300 ms
-        self.update_timer = Timer(0.3, self.update_graphs)
-        self.update_timer.start()
+        """Faster debounced updates for graphs"""
+        # Cancel any pending updates
+        if hasattr(self, '_update_timer'):
+            self.after_cancel(self._update_timer)
+        
+        # Schedule update after shorter delay (100ms instead of 300ms)
+        self._update_timer = self.after(100, self.update_graphs)
     def update_graphs(self):
         """Regenerate and redraw the waveform and filter graphs."""
         waveform = self.generate_waveform()
@@ -421,24 +418,16 @@ class SubtractiveSynth:
 
     def play_sound(self):
         """Play the generated waveform with effects."""
-        # Generate the base waveform
         waveform = self.generate_waveform()
-
-        # Apply filters
         waveform = self.filter.apply_filters(waveform)
-
-        # Apply effects
         waveform = self.effect.apply_effects(waveform)
-
+        
         # Normalize the waveform
         max_val = np.max(np.abs(waveform))
         if max_val > 0:
             waveform = waveform / max_val
-
-        # Play the sound
-        sd.play(waveform, samplerate=self.sample_rate)
-        sd.wait()
-
+            
+        threading.Thread(target=lambda: sd.play(waveform, samplerate=self.sample_rate),daemon=True).start()
 
 
 class Oscillator:

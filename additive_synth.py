@@ -5,6 +5,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from threading import Timer
 from tkinter import simpledialog, messagebox
+import threading
 
 from utils import ScrollableFrame, FFT
 from preset_manager import PresetManager
@@ -171,17 +172,13 @@ class AdditiveSynth:
         }
 
     def debounced_update(self, *args):
-        """Debounce updates for performance and update the harmonics value label."""
-        # Update the harmonics value label
-        self.harmonics_value_label.configure(text=str(int(float(self.harmonics_slider.get()))))
-
-        # Cancel any existing timer
-        if self.update_timer:
-            self.update_timer.cancel()
-
-        # Schedule the graphs to update after 300 ms
-        self.update_timer = Timer(0.3, self.update_graphs)
-        self.update_timer.start()
+        """Faster debounced updates for graphs"""
+        # Cancel any pending updates
+        if hasattr(self, '_update_timer'):
+            self.after_cancel(self._update_timer)
+        
+        # Schedule update after shorter delay (100ms instead of 300ms)
+        self._update_timer = self.after(100, self.update_graphs)
 
     def validate_adsr(self):
         """Ensure ADSR times do not exceed the total duration."""
@@ -347,4 +344,4 @@ class AdditiveSynth:
     def play_sound(self):
         """Generate the waveform and play it using SoundDevice."""
         waveform = self.generate_waveform()
-        sd.play(waveform, samplerate=self.sample_rate)
+        threading.Thread(target=lambda: sd.play(waveform, samplerate=self.sample_rate),daemon=True).start()

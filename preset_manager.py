@@ -593,7 +593,6 @@ class CommunityPresetManager:
         self.app = app
         self.db_path = db_path
 
-        # Debugging: Check the CommunityPresets table
         self.check_community_presets_table()
 
         # Initialize the UI
@@ -622,17 +621,34 @@ class CommunityPresetManager:
             ctk.CTkLabel(self.scrollable_community_frame, text="No presets found in the community library.").pack(pady=10)
             return
 
-        for preset in presets:
-            Sid, name, preset_type, created_at, Uid = preset
-            preset_frame = ctk.CTkFrame(self.scrollable_community_frame)
-            preset_frame.pack(fill="x", padx=5, pady=2)
+        # Add headers
+        headers = ["Preset Name", "Type", "Creator", "Created At", ""]
+        header_frame = ctk.CTkFrame(self.scrollable_community_frame)
+        header_frame.pack(fill="x", pady=5)
+        
+        for col, header in enumerate(headers):
+            ctk.CTkLabel(header_frame, text=header, font=("Arial", 12, "bold")).grid(
+                row=0, column=col, padx=5, pady=5)
 
-            ctk.CTkLabel(preset_frame, text=name).pack(side="left", padx=5)
-            ctk.CTkLabel(preset_frame, text=preset_type).pack(side="left", padx=5)
-            ctk.CTkLabel(preset_frame, text=created_at).pack(side="left", padx=5)
+        # Add presets
+        presets = self.list_community_presets()
+        for idx, (cid, name, ptype, created_at, username) in enumerate(presets, 1):
+            frame = ctk.CTkFrame(self.scrollable_community_frame)
+            frame.pack(fill="x", padx=5, pady=2)
 
-            load_button = ctk.CTkButton(preset_frame, text="Load", command=lambda pid=Sid: self.load_preset_from_community(pid))
-            load_button.pack(side="right", padx=5)
+            # Display information
+            ctk.CTkLabel(frame, text=name).grid(row=idx, column=0, padx=50, pady=5)
+            ctk.CTkLabel(frame, text=ptype).grid(row=idx, column=1, padx=50, pady=5)
+            ctk.CTkLabel(frame, text=username).grid(row=idx, column=2, padx=50, pady=5)
+            ctk.CTkLabel(frame, text=created_at).grid(row=idx, column=3, padx=50, pady=5)
+
+            # Load button
+            load_btn = ctk.CTkButton(
+                frame, 
+                text="Load",
+                command=lambda cid=cid: self.load_preset_from_community(cid)
+            )
+            load_btn.grid(row=idx, column=4, padx=5, pady=5)
     def load_selected_preset(self):
         """Load the selected community preset into the appropriate synth."""
         selected_Sid = self.get_selected_Sid()
@@ -727,26 +743,31 @@ class CommunityPresetManager:
             """, (self.Uid, preset_name, preset_type, json.dumps(preset_data)))
 
             connection.commit()
-            messagebox.showinfo("Success", f"Preset '{preset_name}' uploaded to the community library successfully!")
         except sqlite3.Error as e:
             messagebox.showerror("Database Error", f"ERROR: Database error: {e}")
         finally:
             connection.close()
+        # Refresh immediately after successful upload
+        self.app.after(0, self.refresh_community_presets_list)
+        self.app.after(0, lambda: messagebox.showinfo("Success", "Preset uploaded successfully!"))
 
     def list_community_presets(self):
-        """Retrieve a list of all presets in the community library."""
-        connection = sqlite3.connect(self.db_path)
-        cursor = connection.cursor()
-
+        """Retrieve list with usernames"""
         try:
+            connection = sqlite3.connect(self.db_path)
+            cursor = connection.cursor()
             cursor.execute("""
-                SELECT Cid, name, preset_type, created_at, Uid
-                FROM CommunityPresets
-                ORDER BY created_at DESC
+                SELECT cp.Cid, cp.name, cp.preset_type, cp.created_at, u.username 
+                FROM CommunityPresets cp
+                JOIN Users u ON cp.Uid = u.Uid
+                ORDER BY cp.created_at DESC
             """)
             return cursor.fetchall()
         except sqlite3.Error as e:
-            print(f"ERROR: Database error: {e}")
+            print(f"Database error: {e}")
             return []
         finally:
-            connection.close()
+            if 'connection' in locals():
+                connection.close()
+
+

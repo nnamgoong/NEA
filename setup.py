@@ -99,6 +99,13 @@ def create_dbs():
     """
     cursor.executescript(create_tables)
 
+    cursor.execute("""
+        CREATE VIEW IF NOT EXISTS CommunityPresetsView AS
+        SELECT cp.*, u.username 
+        FROM CommunityPresets cp
+        JOIN Users u ON cp.Uid = u.Uid
+    """)
+
     # Prepopulate the Effects table with predefined effects
     predefined_effects = [
         ("Chorus", "Adds depth and richness to the sound"),
